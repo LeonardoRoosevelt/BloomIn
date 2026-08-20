@@ -1,0 +1,114 @@
+/*
+ * 圖表共用樣式。所有色值、間距、字級都取自 tokens.css —— 圖表與其他元件
+ * 之所以看起來是一套，是因為它們吃的是同一組變數，而不是事後對齊。
+ */
+
+.figure {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-4);
+}
+
+.caption {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-3);
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 座標軸與格線要退到背景，不能跟資料搶注意力 */
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.axisLabel {
+  fill: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font-numeric);
+}
+
+.axisLabelActive {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+.bar {
+  fill: var(--brand-300);
+  transition: fill var(--dur-fast) var(--ease);
+}
+
+.barActive {
+  fill: var(--brand-600);
+}
+
+.valueLabel {
+  fill: var(--text);
+  font-size: 11px;
+  font-family: var(--font-numeric);
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+/* ── 橫向排行 ───────────────────────────────── */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-1) var(--sp-3);
+  align-items: baseline;
+}
+
+.rowLabel {
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowValue {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+}
+
+.rowSub {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+
+.track {
+  grid-column: 1 / -1;
+  height: 8px;
+  background: var(--surface-sunken);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--bar-color);
+  /* 資料端圓角，起點貼齊基線保持方角 */
+  border-radius: 0 4px 4px 0;
+  min-width: 2px;
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  padding: var(--sp-5) 0;
+}

@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Card, Row } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Pill } from '../components/ui/Pill'
+import { StatTiles } from '../components/ui/StatTiles'
 import { IconChevronLeft, IconEdit, IconPhone, IconStudents, IconUser } from '../components/icons'
 import { formatMinutes } from '../domain/billing'
 import {
@@ -112,19 +113,14 @@ export function StudentDetail({ studentId }: { studentId: string }) {
       {/* 刻意不提供刪除：學生的出席紀錄是既有帳務的一部分，
           刪掉會讓過去的月結單對不起來。封存只是從清單隱藏。 */}
 
-      <div className={s.stats} style={{ marginTop: 'var(--sp-5)' }}>
-        <div className={s.stat}>
-          <div className={s.statValue}>{total.presentCount}</div>
-          <div className={s.statLabel}>出席堂數</div>
-        </div>
-        <div className={s.stat}>
-          <div className={s.statValue}>{(total.minutes / 60).toFixed(1)}</div>
-          <div className={s.statLabel}>累計時數</div>
-        </div>
-        <div className={s.stat}>
-          <div className={s.statValue}>{total.amount.toLocaleString('zh-TW')}</div>
-          <div className={s.statLabel}>累計金額</div>
-        </div>
+      <div className={s.stats}>
+        <StatTiles
+          stats={[
+            { label: '出席堂數', value: String(total.presentCount) },
+            { label: '累計時數', value: (total.minutes / 60).toFixed(1) },
+            { label: '累計金額', value: total.amount.toLocaleString('zh-TW') },
+          ]}
+        />
       </div>
 
       {records.length === 0 ? (

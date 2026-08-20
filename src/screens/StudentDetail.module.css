@@ -63,30 +63,7 @@
 /* ── 累計 ───────────────────────────────────── */
 
 .stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-5);
-}
-
-.stat {
-  background: var(--surface-sunken);
-  border-radius: var(--r-md);
-  padding: var(--sp-3);
-  text-align: center;
-}
-
-.statValue {
-  font-family: var(--font-numeric);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-lg);
-  letter-spacing: -0.01em;
-}
-
-.statLabel {
-  font-size: var(--fs-xs);
-  color: var(--text-tertiary);
-  margin-top: 2px;
+  margin: var(--sp-5) 0;
 }
 
 /* ── 出席歷史 ───────────────────────────────── */

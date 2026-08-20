@@ -1,0 +1,26 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-2);
+}
+
+.tile {
+  background: var(--surface-sunken);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  text-align: center;
+}
+
+.value {
+  /* 刻意不用 --font-numeric 與 tabular-nums：等寬數字只在需要縱向對齊的
+     表格列與座標軸刻度才正確，用在獨立的大數字上會顯得鬆散。 */
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.label {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}

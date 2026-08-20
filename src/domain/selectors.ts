@@ -134,3 +134,68 @@ export function sessionsInMonth(d: AppState, month: string): Session[] {
       return byDate !== 0 ? byDate : a.startTime.localeCompare(b.startTime)
     })
 }
+
+/* ── 帳務與統計 ─────────────────────────────── */
+
+/** 某月（'YYYY-MM'）的所有出席紀錄。 */
+export function recordsInMonth(d: AppState, month: string): AttendanceRecord[] {
+  const sessions = new Map(d.sessions.filter((s) => s.date.startsWith(month)).map((s) => [s.id, s]))
+  return d.attendances.flatMap((attendance) => {
+    const session = sessions.get(attendance.sessionId)
+    if (!session) return []
+    if (!session.rosterStudentIds.includes(attendance.studentId)) return []
+    return [{ attendance, session }]
+  })
+}
+
+export function totalsByCourseType(
+  d: AppState,
+  records: readonly AttendanceRecord[],
+): { courseType: CourseType | null; totals: PeriodTotals }[] {
+  const map = new Map<string, AttendanceRecord[]>()
+  for (const r of records) {
+    const key = r.session.courseTypeId
+    const bucket = map.get(key)
+    if (bucket) bucket.push(r)
+    else map.set(key, [r])
+  }
+  return [...map.entries()]
+    .map(([id, recs]) => ({
+      courseType: d.courseTypes.find((c) => c.id === id) ?? null,
+      totals: totalsOf(recs),
+    }))
+    .sort((a, b) => b.totals.amount - a.totals.amount)
+}
+
+export function totalsByStudent(
+  d: AppState,
+  records: readonly AttendanceRecord[],
+): { student: Student; totals: PeriodTotals }[] {
+  const map = new Map<string, AttendanceRecord[]>()
+  for (const r of records) {
+    const bucket = map.get(r.attendance.studentId)
+    if (bucket) bucket.push(r)
+    else map.set(r.attendance.studentId, [r])
+  }
+  return [...map.entries()]
+    .flatMap(([id, recs]) => {
+      const student = d.students.find((s) => s.id === id)
+      return student ? [{ student, totals: totalsOf(recs) }] : []
+    })
+    .sort((a, b) => b.totals.amount - a.totals.amount)
+}
+
+/** 從 anchor（'YYYY-MM'）往回數 count 個月，舊到新排列。 */
+export function recentMonths(anchor: string, count: number): string[] {
+  const [y, m] = anchor.split('-').map(Number) as [number, number]
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(y, m - 1 - (count - 1 - i), 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+}
+
+/** 出席率：出席與遲到佔所有已點名紀錄的比例。未點名者不計入分母。 */
+export function attendanceRate(totals: PeriodTotals): number | null {
+  if (totals.recordCount === 0) return null
+  return totals.presentCount / totals.recordCount
+}

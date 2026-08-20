@@ -1,0 +1,50 @@
+.split {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.monthTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: var(--sp-5) var(--sp-1) var(--sp-3);
+}
+
+.monthName {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.hint {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  margin-inline-start: auto;
+}
+
+.figureTitle {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  margin-bottom: var(--sp-1);
+}
+
+/* 平板：全部圖表兩欄化。
+ * SVG 用 viewBox 縮放，卡片一寬，座標軸文字與格線就跟著等比放大 ——
+ * 把每欄限制在約手機寬度，縮放比例才會維持在 1 附近。 */
+@media (min-width: 768px) {
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-4);
+    align-items: start;
+  }
+  .monthTitle {
+    margin-top: 0;
+  }
+}

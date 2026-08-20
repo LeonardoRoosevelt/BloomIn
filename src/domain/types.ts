@@ -28,16 +28,21 @@ export type AccentToken =
   | 'terracotta'
   | 'azure'
   | 'moss'
-  | 'ochre'
   | 'wisteria'
+  | 'ochre'
   | 'celadon'
 
+/**
+ * 指派順序即驗證順序：圖表配色驗證器檢查的是「相鄰對」的可分辨度，
+ * 而芥黃與苔綠色相相鄰，因此刻意用紫藤把兩者隔開。改動順序前請重跑
+ * tokens.css 註解裡記載的驗證。
+ */
 export const ACCENT_TOKENS: readonly AccentToken[] = [
   'terracotta',
   'azure',
   'moss',
-  'ochre',
   'wisteria',
+  'ochre',
   'celadon',
 ]
 
@@ -135,7 +140,7 @@ function seedCourseTypes(defaultRate: number): CourseType[] {
   return [
     { name: '素描', accent: 'terracotta' as const },
     { name: '水彩', accent: 'azure' as const },
-    { name: '兒童繪畫班', accent: 'ochre' as const },
+    { name: '兒童繪畫班', accent: 'moss' as const },
   ].map((c) => ({
     id: newId(),
     name: c.name,

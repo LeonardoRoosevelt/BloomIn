@@ -14,13 +14,22 @@
   --brand-600: #4b4a9b;
   --brand-700: #3b3a80;
 
-  /* ── 課程類型 accent 池（固定六色，飽和度與明度刻意對齊，任兩色並列都不打架） ── */
-  --accent-terracotta: #c0674b;
-  --accent-azure: #3f7cac;
-  --accent-moss: #6b8e5a;
-  --accent-ochre: #c99b3f;
-  --accent-wisteria: #8a6ba8;
-  --accent-celadon: #4e9e93;
+  /* ── 課程類型 accent 池（固定六色） ───────────────────
+   * 這組色同時要當 UI 標籤與圖表色塊，後者要求「彼此可分辨」，標準嚴格得多。
+   * 數值由 dataviz 的 validate_palette.js 驗算過，六項全數通過（light，surface #fcfcfb）：
+   *   亮度帶 L 0.43–0.77 ✓　彩度下限 ✓　相鄰 CVD 最差 ΔE 13 ✓　正常視覺最差 ΔE 15+ ✓　對比 ≥3:1 ✓
+   *
+   * 順序有意義：ACCENT_TOKENS 依此序指派給課程類型，而驗證器檢查的是「相鄰對」。
+   * 芥黃與苔綠色相相鄰，刻意用紫藤隔開；調換順序或改動色值前請重跑驗證器。
+   *
+   * 六色在色盲下無法「兩兩皆可分辨」（紅/綠、藍/紫必然塌陷），因此圖表一律
+   * 逐列直接標註名稱與數值，顏色只是輔助，絕不是唯一編碼。 */
+  --accent-terracotta: #c2553a;
+  --accent-azure: #2c78b4;
+  --accent-moss: #4c8a55;
+  --accent-wisteria: #8757b0;
+  --accent-ochre: #b0851c;
+  --accent-celadon: #1f9c8f;
 
   /* ── 語意色 ───────────────────────────────────── */
   --success: #4e8c5b;
@@ -103,15 +112,17 @@
     --brand-300: #6564bb;
     --brand-500: #8180cc;
     --brand-600: #9594d6;
-    --brand-700: #adacE2;
+    --brand-700: #adace2;
 
-    /* accent 提亮約 15%，在深色底上維持同等辨識度 */
-    --accent-terracotta: #d98868;
-    --accent-azure: #6aa3ce;
-    --accent-moss: #8fb37c;
-    --accent-ochre: #dfb864;
-    --accent-wisteria: #ab8dc6;
-    --accent-celadon: #6cbfb3;
+    /* 深色模式的圖表色塊亮度帶是 L 0.48–0.67 —— 比直覺的粉彩色調暗。
+     * 同樣經 validate_palette.js 驗算，六項全數通過（dark）：
+     *   亮度帶 ✓　彩度下限 ✓　相鄰 CVD 最差 ΔE 13.6 ✓　正常視覺最差 ΔE 16.8 ✓　對比 ≥3:1 ✓ */
+    --accent-terracotta: #d16a4a;
+    --accent-azure: #4a8fc8;
+    --accent-moss: #5d9c62;
+    --accent-wisteria: #9878c6;
+    --accent-ochre: #b28720;
+    --accent-celadon: #22a897;
 
     --success: #79b487;
     --warning: #dbab55;
