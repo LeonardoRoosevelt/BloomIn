@@ -6,6 +6,7 @@ import { Today } from './screens/Today'
 import { SessionDetail } from './screens/SessionDetail'
 import { Calendar } from './screens/Calendar'
 import { Students } from './screens/Students'
+import { StudentDetail } from './screens/StudentDetail'
 import { Billing } from './screens/Billing'
 import { Settings } from './screens/Settings'
 
@@ -26,7 +27,8 @@ export function App() {
       {route.name === 'today' && <Today />}
       {route.name === 'session' && <SessionDetail sessionId={route.id} />}
       {route.name === 'calendar' && <Calendar />}
-      {(route.name === 'students' || route.name === 'student') && <Students />}
+      {route.name === 'students' && <Students />}
+      {route.name === 'student' && <StudentDetail studentId={route.id} />}
       {route.name === 'billing' && <Billing />}
       {route.name === 'settings' && <Settings />}
     </AppShell>

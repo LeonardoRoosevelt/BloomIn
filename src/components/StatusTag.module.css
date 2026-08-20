@@ -1,0 +1,8 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--tone);
+  white-space: nowrap;
+}

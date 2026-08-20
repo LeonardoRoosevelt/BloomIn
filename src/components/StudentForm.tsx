@@ -79,12 +79,10 @@ export function StudentForm({
       archived: student?.archived ?? false,
     }
 
-    if (student) {
-      updateStudent(student.id, payload)
-      onSaved?.(student.id)
-    } else {
-      onSaved?.(addStudent(payload))
-    }
+    // 先建立再通知：寫成 onSaved?.(addStudent(...)) 會在 onSaved 未提供時
+    // 被 optional chaining 整段短路，導致學生根本沒被新增。
+    const id = student ? (updateStudent(student.id, payload), student.id) : addStudent(payload)
+    onSaved?.(id)
     onClose()
   }
 

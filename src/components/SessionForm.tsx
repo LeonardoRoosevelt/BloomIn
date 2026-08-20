@@ -54,6 +54,9 @@ export function SessionForm({
     if (validateTimeWindow(draft.startTime, draft.endTime) !== null) return
     if (draft.courseTypeId === '') return
 
+    // 先寫入再通知：把呼叫包在 onSaved?.(...) 裡，會在 onSaved 未提供時
+    // 被 optional chaining 整段短路，課程根本不會被建立。
+    let id: string
     if (session) {
       updateSession(session.id, {
         date: draft.date,
@@ -63,24 +66,23 @@ export function SessionForm({
         topic: draft.topic.trim(),
         note: draft.note.trim(),
       })
-      onSaved?.(session.id)
+      id = session.id
     } else {
       // 新課預設帶入所有修習該課程的學生，老師再於點名畫面增減
       const roster = students
         .filter((s) => !s.archived && s.courseTypeIds.includes(draft.courseTypeId))
         .map((s) => s.id)
-      onSaved?.(
-        addSession({
-          date: draft.date,
-          startTime: draft.startTime,
-          endTime: draft.endTime,
-          courseTypeId: draft.courseTypeId,
-          topic: draft.topic.trim(),
-          note: draft.note.trim(),
-          rosterStudentIds: roster,
-        }),
-      )
+      id = addSession({
+        date: draft.date,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        courseTypeId: draft.courseTypeId,
+        topic: draft.topic.trim(),
+        note: draft.note.trim(),
+        rosterStudentIds: roster,
+      })
     }
+    onSaved?.(id)
     onClose()
   }
 

@@ -1,0 +1,61 @@
+.search {
+  position: relative;
+  margin-bottom: var(--sp-4);
+}
+
+.searchIcon {
+  position: absolute;
+  inset-inline-start: var(--sp-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--sp-3) 0 var(--sp-7);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  /* iOS 對 font-size < 16px 的輸入框會自動放大整頁 */
+  font-size: 16px;
+}
+
+.searchInput:focus {
+  outline: 2px solid var(--brand-600);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.tags {
+  display: flex;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+  margin-top: var(--sp-1);
+}
+
+.count {
+  font-size: var(--fs-sm);
+  color: var(--text-tertiary);
+  margin-bottom: var(--sp-2);
+  padding-inline: var(--sp-1);
+}
+
+.archivedToggle {
+  margin-top: var(--sp-4);
+  text-align: center;
+}
+
+.archivedRow {
+  opacity: 0.55;
+}
+
+.money {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}

@@ -1,19 +1,15 @@
 import { useState } from 'react'
 import { ScreenHeader } from '../components/AppShell'
 import { Easel } from '../components/illustrations/Easel'
+import { SessionCard } from '../components/SessionCard'
 import { SessionForm } from '../components/SessionForm'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Pill } from '../components/ui/Pill'
-import { IconClock, IconPlus, IconStudents } from '../components/icons'
-import { formatMinutes } from '../domain/billing'
-import { courseTypeOf, sessionTotals, sessionsOnDate } from '../domain/selectors'
-import { accentVar } from '../lib/accent'
+import { IconPlus } from '../components/icons'
+import { sessionsOnDate } from '../domain/selectors'
 import { formatDateLong, todayISO } from '../lib/date'
-import { formatMoney } from '../lib/format'
 import { navigate } from '../lib/router'
 import { useStore } from '../store/useStore'
-import type { CSSProperties } from 'react'
 import s from './Today.module.css'
 
 export function Today() {
@@ -48,52 +44,9 @@ export function Today() {
         />
       ) : (
         <div className={s.list}>
-          {sessions.map((session) => {
-            const course = courseTypeOf(data, session)
-            const totals = sessionTotals(data, session)
-            const allMarked = totals.markedCount === totals.rosterCount
-            return (
-              <button
-                key={session.id}
-                type="button"
-                className={s.card}
-                style={
-                  {
-                    '--card-accent': course ? accentVar(course.accent) : 'var(--border)',
-                  } as CSSProperties
-                }
-                onClick={() => navigate({ name: 'session', id: session.id })}
-              >
-                <div className={s.cardTop}>
-                  <span className={s.time}>
-                    {session.startTime}–{session.endTime}
-                  </span>
-                  <span className={s.spacer} />
-                  {course && <Pill accent={course.accent}>{course.name}</Pill>}
-                </div>
-
-                <div className={`${s.topic} ${session.topic === '' ? s.topicEmpty : ''}`}>
-                  {session.topic === '' ? '未填課程內容' : session.topic}
-                </div>
-
-                <div className={s.meta}>
-                  <span className={`${s.metaItem} ${allMarked ? '' : s.pending}`}>
-                    <IconStudents size={16} />
-                    {allMarked
-                      ? `${totals.presentCount}/${totals.rosterCount} 出席`
-                      : `已點名 ${totals.markedCount}/${totals.rosterCount}`}
-                  </span>
-                  {totals.totalMinutes > 0 && (
-                    <span className={s.metaItem}>
-                      <IconClock size={16} />
-                      {formatMinutes(totals.totalMinutes)}
-                    </span>
-                  )}
-                  <span className={s.amount}>{formatMoney(totals.totalAmount)}</span>
-                </div>
-              </button>
-            )
-          })}
+          {sessions.map((session) => (
+            <SessionCard key={session.id} session={session} />
+          ))}
         </div>
       )}
 

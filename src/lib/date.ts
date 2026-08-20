@@ -46,3 +46,10 @@ export function defaultSessionTimes(): { startTime: string; endTime: string } {
   const hh = (h: number) => String(Math.min(h, 23)).padStart(2, '0')
   return { startTime: `${hh(start)}:00`, endTime: `${hh(start + 2)}:00` }
 }
+
+/** 'YYYY-MM' → '2026 年 8 月'。去掉前導零，避免顯示成「08 月」。 */
+export function formatMonth(month: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(month)
+  if (!m) return month
+  return `${m[1]} 年 ${Number(m[2])} 月`
+}

@@ -1,0 +1,134 @@
+.monthBar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.monthLabel {
+  flex: 1;
+  text-align: center;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-2);
+  margin-bottom: var(--sp-5);
+}
+
+.weekHead {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: var(--sp-1);
+}
+
+.weekName {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  padding-bottom: var(--sp-1);
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.day {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  transition: background var(--dur-fast) var(--ease);
+  /* 上限 56px：平板上格子若隨欄寬長大會變成一片空曠的大方塊 */
+  max-height: 56px;
+}
+
+.blank {
+  visibility: hidden;
+}
+
+.outside {
+  color: var(--text-tertiary);
+}
+
+.today {
+  box-shadow: inset 0 0 0 1.5px var(--brand-300);
+}
+
+.selected {
+  background: var(--brand-600);
+  color: var(--text-on-brand);
+}
+
+.dots {
+  display: flex;
+  gap: 2px;
+  height: 5px;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--dot-color);
+}
+
+/* 選中日的圓點改用底色的反白，才不會在深色方塊上消失 */
+.selected .dot {
+  background: var(--text-on-brand);
+}
+
+.dayList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.dayHead {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  margin-bottom: var(--sp-3);
+  padding-inline: var(--sp-1);
+}
+
+.monthSummary {
+  display: flex;
+  gap: var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  padding: 0 var(--sp-1) var(--sp-4);
+}
+
+.monthSummary strong {
+  color: var(--text);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* 平板：月曆與當日課程並排。單欄時格子被拉得又寬又扁，橫向空間也白白浪費。 */
+@media (min-width: 768px) {
+  .split {
+    display: grid;
+    grid-template-columns: minmax(320px, 380px) 1fr;
+    gap: var(--sp-5);
+    align-items: start;
+  }
+  .dayHead {
+    margin-top: 0;
+  }
+}
