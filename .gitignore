@@ -1,7 +1,10 @@
 node_modules/
+# 沙箱限制下 pnpm 會把 store 建在專案內，144M 且絕不該進版控
+.pnpm-store/
 dist/
 dev-dist/
 *.local
 .DS_Store
 .vite/
 coverage/
+*.tsbuildinfo
