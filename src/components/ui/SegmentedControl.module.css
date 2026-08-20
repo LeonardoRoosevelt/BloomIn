@@ -1,0 +1,35 @@
+.wrap {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-sunken);
+  border-radius: var(--r-md);
+}
+
+.seg {
+  flex: 1;
+  min-height: 38px;
+  padding: 0 var(--sp-2);
+  border-radius: calc(var(--r-md) - 3px);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  font-weight: 500;
+}
+
+/* 選中時整段染上該選項的語意色，例如缺席選項變紅 —— 讓狀態一眼可辨 */
+.active[data-tone] {
+  color: var(--tone);
+}

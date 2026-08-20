@@ -1,0 +1,67 @@
+.field {
+  display: block;
+  margin-bottom: var(--sp-4);
+}
+
+.label {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.control {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  /* iOS 對 font-size < 16px 的輸入框會自動放大整頁，必須壓住 */
+  font-size: 16px;
+}
+
+textarea.control {
+  padding: var(--sp-3);
+  min-height: 88px;
+  resize: vertical;
+  line-height: var(--lh-normal);
+}
+
+.control:focus {
+  outline: 2px solid var(--brand-600);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.numeric {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  font-size: var(--fs-sm);
+  color: var(--text-tertiary);
+  margin-top: var(--sp-2);
+}
+
+.error {
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  margin-top: var(--sp-2);
+}
+
+.invalid {
+  border-color: var(--danger);
+}
+
+.inline {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.inline > * {
+  flex: 1;
+  margin-bottom: 0;
+}

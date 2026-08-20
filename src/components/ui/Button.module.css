@@ -1,0 +1,65 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  border-radius: var(--r-md);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    opacity var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+  /* 44px 是 iOS 的最小可靠觸控目標，點名時手指不會誤觸隔壁 */
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-md);
+}
+
+.btn:active:not(:disabled) {
+  opacity: 0.65;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+}
+
+.lg {
+  min-height: 52px;
+  padding: 0 var(--sp-5);
+  font-size: var(--fs-lg);
+}
+
+.iconOnly {
+  padding: 0;
+  width: 44px;
+}
+
+.iconOnly.lg {
+  width: 52px;
+}
+
+.block {
+  width: 100%;
+}
+
+.primary {
+  background: var(--brand-600);
+  color: var(--text-on-brand);
+}
+
+.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--brand-600);
+}
+
+.danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+}
