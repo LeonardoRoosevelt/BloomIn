@@ -184,8 +184,8 @@ const checkServiceWorker = async (): Outcome => {
   if (!('serviceWorker' in navigator)) {
     return { detail: '此瀏覽器不支援', level: 'fail' }
   }
-  const secure = location.protocol === 'https:' || location.hostname === 'localhost'
-  if (!secure) {
+  // isSecureContext 才是瀏覽器實際採用的判準，手動比對 protocol/hostname 會誤判 127.0.0.1
+  if (!window.isSecureContext) {
     return { detail: '目前不是 HTTPS，瀏覽器不允許註冊（開發模式的預期行為）', level: 'fail' }
   }
   const reg = await navigator.serviceWorker.getRegistration()
