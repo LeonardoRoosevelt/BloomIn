@@ -10,7 +10,7 @@ import {
   type Student,
 } from '../domain/types'
 import { newId } from '../lib/id'
-import { loadState, saveState } from './db'
+import { loadRollback, loadState, saveRollback, saveState } from './db'
 
 interface StoreState {
   data: AppState
@@ -19,8 +19,14 @@ interface StoreState {
   hydrateError: string | null
 
   hydrate: () => Promise<void>
-  /** 直接以整份 state 取代現況，供備份還原使用。 */
-  replaceAll: (next: AppState) => void
+  /**
+   * 以匯入的 state 完整取代現況。覆蓋前會先存下回復點，選錯檔案時還救得回來。
+   */
+  importState: (next: AppState) => Promise<void>
+  /** 從回復點還原到最近一次匯入之前的狀態。找不到回復點時回傳 false。 */
+  rollbackImport: () => Promise<boolean>
+  /** 記下備份完成的時間，提醒橫幅依此判斷。 */
+  markBackedUp: (at: string) => void
 
   updateSettings: (patch: Partial<Settings>) => void
 
@@ -63,7 +69,23 @@ export const useStore = create<StoreState>((set) => ({
     }
   },
 
-  replaceAll: (next) => commit(set, () => next),
+  importState: async (next) => {
+    // 先把現況寫進回復點，再覆蓋 —— 順序反過來就沒有救援機會了
+    await saveRollback(useStore.getState().data)
+    commit(set, () => next)
+    await flushPersist()
+  },
+
+  rollbackImport: async () => {
+    const snapshot = await loadRollback<AppState>()
+    if (!snapshot) return false
+    commit(set, () => snapshot.state)
+    await flushPersist()
+    return true
+  },
+
+  markBackedUp: (at) =>
+    commit(set, (d) => ({ ...d, settings: { ...d.settings, lastBackupAt: at } })),
 
   updateSettings: (patch) =>
     commit(set, (d) => ({ ...d, settings: { ...d.settings, ...patch } })),

@@ -1,0 +1,96 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-4);
+}
+
+.status {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-4);
+}
+
+.statusValue {
+  color: var(--text);
+}
+
+.stale {
+  color: var(--warning);
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.actions > * {
+  flex: 1;
+}
+
+.file {
+  display: none;
+}
+
+.result {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+
+.ok {
+  color: var(--success);
+}
+
+.err {
+  color: var(--danger);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+  font-size: var(--fs-md);
+}
+
+.summaryRow {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.summaryLabel {
+  color: var(--text-secondary);
+  width: 6em;
+  flex-shrink: 0;
+}
+
+.summaryValue {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.warn {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+
+.rollback {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+.rollbackNote {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+}

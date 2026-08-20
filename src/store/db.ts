@@ -75,3 +75,29 @@ export async function saveProbe(probe: Probe): Promise<void> {
   const db = await getDb()
   await db.put(STORE, probe, PROBE_KEY)
 }
+
+/* ── 匯入前的回復點 ─────────────────────────────
+ * 匯入是完整覆蓋，所以覆蓋前先把現況存到另一個 key。
+ * 選錯檔案時還救得回來 —— 這比匯入本身更重要。
+ */
+const ROLLBACK_KEY = 'rollback'
+
+export interface Rollback<T> {
+  savedAt: string
+  state: T
+}
+
+export async function saveRollback<T>(state: T): Promise<void> {
+  const db = await getDb()
+  await db.put(STORE, { savedAt: new Date().toISOString(), state } satisfies Rollback<T>, ROLLBACK_KEY)
+}
+
+export async function loadRollback<T>(): Promise<Rollback<T> | undefined> {
+  const db = await getDb()
+  return db.get(STORE, ROLLBACK_KEY) as Promise<Rollback<T> | undefined>
+}
+
+export async function clearRollback(): Promise<void> {
+  const db = await getDb()
+  await db.delete(STORE, ROLLBACK_KEY)
+}

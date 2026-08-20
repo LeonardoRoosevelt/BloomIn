@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { ScreenHeader } from '../components/AppShell'
+import { BackupPanel } from '../components/BackupPanel'
 import { CourseTypeForm } from '../components/CourseTypeForm'
 import { Button } from '../components/ui/Button'
 import { Field, Input } from '../components/ui/Field'
@@ -133,6 +134,17 @@ export function Settings() {
             </Button>
           </div>
         )}
+      </section>
+
+      <section className={s.section}>
+        <div className={s.sectionHead}>
+          <h2 className={s.sectionTitle}>資料</h2>
+        </div>
+        <BackupPanel />
+        <p className={s.note}>
+          資料只存在這台裝置。<strong>刪除主畫面圖示或清除網站資料，紀錄會一起消失且無法復原。</strong>
+          匯出的備份檔請存到 iCloud Drive 或另一台裝置。
+        </p>
       </section>
 
       <CourseTypeForm open={creating} courseType={null} onClose={() => setCreating(false)} />
