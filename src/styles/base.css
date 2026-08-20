@@ -70,3 +70,25 @@ textarea,
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * 列印容器。掛在 <body> 底下而不是 App 內部 —— 列印時要把整個 App 隱藏，
+ * 若月結單長在 App 裡面，父層一被隱藏它也會跟著消失。
+ */
+.print-root {
+  display: none;
+}
+
+@media print {
+  #root {
+    display: none !important;
+  }
+  .print-root {
+    display: block !important;
+  }
+  body {
+    background: #fff;
+    /* 列印稿不跟隨 App 主題 */
+    color: #000;
+  }
+}

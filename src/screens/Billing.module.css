@@ -47,4 +47,8 @@
   .monthTitle {
     margin-top: 0;
   }
+  /* 報表是表單不是圖表，橫跨兩欄比擠在單欄好用 */
+  .reports {
+    grid-column: 1 / -1;
+  }
 }

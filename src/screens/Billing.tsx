@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ScreenHeader } from '../components/AppShell'
+import { ReportsPanel } from '../components/ReportsPanel'
 import { MonthlyBars, type MonthPoint } from '../components/charts/MonthlyBars'
 import { RankBars, type RankRow } from '../components/charts/RankBars'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -113,6 +114,13 @@ export function Billing() {
             <div className={s.figureTitle}>學生收入排行</div>
             <p className={c.caption}>單一量測值，因此所有長條同色。</p>
             <RankBars rows={studentRows} emptyText="這個月還沒有出席紀錄。" />
+          </section>
+
+          <section className={s.reports}>
+            <div className={s.monthTitle}>
+              <span className={s.monthName}>報表</span>
+            </div>
+            <ReportsPanel month={selected} />
           </section>
         </div>
       )}

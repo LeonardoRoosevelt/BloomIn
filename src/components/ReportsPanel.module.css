@@ -1,0 +1,56 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-4);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.csvRow {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.csvRow > * {
+  flex: 1;
+}
+
+.note {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: var(--lh-normal);
+  margin-top: var(--sp-3);
+}
+
+.link {
+  color: var(--brand-600);
+  padding: 0 2px;
+  text-decoration: underline;
+}
+
+.result {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.ok {
+  color: var(--success);
+}
+
+.err {
+  color: var(--danger);
+}
+
+.empty {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  text-align: center;
+  padding: var(--sp-5) 0;
+}
