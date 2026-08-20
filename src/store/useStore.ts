@@ -15,6 +15,8 @@ import { loadState, saveState } from './db'
 interface StoreState {
   data: AppState
   hydrated: boolean
+  /** 載入失敗的原因；非 null 時畫面必須顯示錯誤而非空白 */
+  hydrateError: string | null
 
   hydrate: () => Promise<void>
   /** 直接以整份 state 取代現況，供備份還原使用。 */
@@ -43,10 +45,20 @@ interface StoreState {
 export const useStore = create<StoreState>((set) => ({
   data: createInitialState(),
   hydrated: false,
+  hydrateError: null,
 
+  /**
+   * 載入失敗時不得靜默 —— 之前這裡的例外會讓 App 停在完全空白的畫面，
+   * 使用者看不到任何線索。更重要的是：讀取失敗時絕不能讓人開始輸入，
+   * 否則新資料會覆蓋掉可能還救得回來的舊資料。
+   */
   hydrate: async () => {
-    const stored = await loadState<AppState>()
-    set({ data: stored ?? createInitialState(), hydrated: true })
+    try {
+      const stored = await loadState<AppState>()
+      set({ data: stored ?? createInitialState(), hydrated: true, hydrateError: null })
+    } catch (err) {
+      set({ hydrated: true, hydrateError: err instanceof Error ? err.message : String(err) })
+    }
   },
 
   replaceAll: (next) => commit(set, () => next),

@@ -9,10 +9,14 @@ import { Students } from './screens/Students'
 import { StudentDetail } from './screens/StudentDetail'
 import { Billing } from './screens/Billing'
 import { Settings } from './screens/Settings'
+import { EmptyState } from './components/ui/EmptyState'
+import { Button } from './components/ui/Button'
+import { IconAlert } from './components/icons'
 
 export function App() {
   const route = useRoute()
   const hydrated = useStore((st) => st.hydrated)
+  const hydrateError = useStore((st) => st.hydrateError)
   const hydrate = useStore((st) => st.hydrate)
 
   useEffect(() => {
@@ -21,6 +25,10 @@ export function App() {
 
   // 資料尚未從 IndexedDB 載入前不渲染畫面，避免先閃出空狀態再跳成有資料
   if (!hydrated) return null
+
+  // 讀不到資料時停在錯誤畫面，不讓使用者開始輸入 ——
+  // 在載入失敗的狀態下新增資料，會把可能還救得回來的舊資料覆蓋掉。
+  if (hydrateError !== null) return <LoadFailure message={hydrateError} />
 
   return (
     <AppShell>
@@ -32,5 +40,18 @@ export function App() {
       {route.name === 'billing' && <Billing />}
       {route.name === 'settings' && <Settings />}
     </AppShell>
+  )
+}
+
+function LoadFailure({ message }: { message: string }) {
+  return (
+    <div style={{ padding: 'var(--sp-5)', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
+      <EmptyState
+        art={<IconAlert size={72} />}
+        title="無法讀取本機資料"
+        description={`${message}。資料可能仍在，請先重新載入；若持續失敗，請勿在此狀態下新增資料。`}
+        action={<Button onClick={() => location.reload()}>重新載入</Button>}
+      />
+    </div>
   )
 }
