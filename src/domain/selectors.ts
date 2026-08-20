@@ -199,3 +199,8 @@ export function attendanceRate(totals: PeriodTotals): number | null {
   if (totals.recordCount === 0) return null
   return totals.presentCount / totals.recordCount
 }
+
+/** 有幾堂課引用這個課程類型。用來判斷它是否還能被刪除。 */
+export function sessionCountForCourseType(d: AppState, courseTypeId: string): number {
+  return d.sessions.filter((s) => s.courseTypeId === courseTypeId).length
+}

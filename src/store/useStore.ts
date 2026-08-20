@@ -26,6 +26,8 @@ interface StoreState {
 
   addCourseType: (input: Omit<CourseType, 'id'>) => string
   updateCourseType: (id: string, patch: Partial<Omit<CourseType, 'id'>>) => void
+  /** 僅在沒有任何課程引用它時才會真的刪除；有引用時不做任何事。 */
+  deleteCourseType: (id: string) => void
 
   addStudent: (input: Omit<Student, 'id' | 'createdAt'>) => string
   updateStudent: (id: string, patch: Partial<Omit<Student, 'id' | 'createdAt'>>) => void
@@ -78,6 +80,19 @@ export const useStore = create<StoreState>((set) => ({
       ...d,
       courseTypes: d.courseTypes.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     })),
+
+  /**
+   * 只刪除沒有被任何課程引用的類型。
+   *
+   * 已被引用的類型若被移除，過去的課程會失去名稱與識別色，月結單上只剩一個
+   * 認不出來的項目。這種情況請改用封存（archived），畫面上會擋下刪除並說明原因。
+   */
+  deleteCourseType: (id) =>
+    commit(set, (d) =>
+      d.sessions.some((s) => s.courseTypeId === id)
+        ? d
+        : { ...d, courseTypes: d.courseTypes.filter((c) => c.id !== id) },
+    ),
 
   addStudent: (input) => {
     const id = newId()
