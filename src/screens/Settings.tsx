@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { ScreenHeader } from '../components/AppShell'
 import { BackupPanel } from '../components/BackupPanel'
+import { OfflineStatus } from '../components/OfflineStatus'
 import { CourseTypeForm } from '../components/CourseTypeForm'
 import { Button } from '../components/ui/Button'
 import { Field, Input } from '../components/ui/Field'
@@ -134,6 +135,13 @@ export function Settings() {
             </Button>
           </div>
         )}
+      </section>
+
+      <section className={s.section}>
+        <div className={s.sectionHead}>
+          <h2 className={s.sectionTitle}>離線狀態</h2>
+        </div>
+        <OfflineStatus />
       </section>
 
       <section className={s.section}>
