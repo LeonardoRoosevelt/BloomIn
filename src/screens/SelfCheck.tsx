@@ -140,104 +140,110 @@ export function SelfCheck() {
   )
 }
 
+/**
+ * 逐項執行檢查。每一項都獨立包住例外 —— 任何一個 probe 拋錯
+ * 都不該讓整頁停在「檢查中…」，那會讓實機驗證變成瞎猜。
+ */
 async function runChecks(): Promise<Check[]> {
-  const out: Check[] = []
+  return [
+    await safe('standalone', '以獨立 App 模式開啟', checkStandalone),
+    await safe('sw', 'Service Worker 離線快取', checkServiceWorker),
+    await safe('idb', '重啟後資料仍在', checkPersistence),
+    await safe('persist', '已取得持久化儲存授權', checkPersistGrant),
+    await safe('quota', '可用儲存空間', checkQuota),
+    await safe('share', '原生分享面板可送出檔案', checkShare),
+    await safe('platform', '裝置', checkPlatform),
+  ]
+}
 
-  // 1. 安裝模式
-  const standalone = isStandalone()
-  out.push({
-    id: 'standalone',
-    label: '以獨立 App 模式開啟',
-    detail: standalone
+async function safe(
+  id: string,
+  label: string,
+  probe: () => Promise<Omit<Check, 'id' | 'label'>>,
+): Promise<Check> {
+  try {
+    return { id, label, ...(await probe()) }
+  } catch (err) {
+    return { id, label, detail: `檢查失敗：${String(err)}`, level: 'fail' }
+  }
+}
+
+type Outcome = Promise<Omit<Check, 'id' | 'label'>>
+
+const checkStandalone = async (): Outcome => {
+  const on = isStandalone()
+  return {
+    detail: on
       ? '已從主畫面啟動，沒有 Safari 網址列'
       : '目前在 Safari 分頁中。請用「分享 → 加入主畫面」後從主畫面重開，才測得到真實行為',
-    level: standalone ? 'pass' : 'warn',
-  })
+    level: on ? 'pass' : 'warn',
+  }
+}
 
-  // 2. Service Worker（離線能力的基礎）
+const checkServiceWorker = async (): Outcome => {
   if (!('serviceWorker' in navigator)) {
-    out.push({ id: 'sw', label: 'Service Worker 離線快取', detail: '此瀏覽器不支援', level: 'fail' })
-  } else {
-    const reg = await navigator.serviceWorker.getRegistration()
-    const active = reg?.active?.state === 'activated'
-    out.push({
-      id: 'sw',
-      label: 'Service Worker 離線快取',
-      detail: active
-        ? '已啟用。開飛航模式後仍應能冷啟動'
-        : location.protocol === 'https:' || location.hostname === 'localhost'
-          ? '尚未啟用，重新載入一次再看'
-          : '目前不是 HTTPS，瀏覽器不允許註冊（開發模式的預期行為）',
-      level: active ? 'pass' : 'fail',
-    })
+    return { detail: '此瀏覽器不支援', level: 'fail' }
   }
-
-  // 3. IndexedDB 跨啟動持久化
-  try {
-    const now = new Date().toISOString()
-    const prev = await loadProbe()
-    const next: Probe = {
-      firstSeenAt: prev?.firstSeenAt ?? now,
-      lastSeenAt: now,
-      launchCount: (prev?.launchCount ?? 0) + 1,
-    }
-    await saveProbe(next)
-    out.push({
-      id: 'idb',
-      label: '重啟後資料仍在',
-      detail: prev
-        ? `第 ${next.launchCount} 次載入，首次寫入於 ${formatTime(next.firstSeenAt)}`
-        : '這是第 1 次寫入。完全關閉 App 再開，這個數字要變成 2',
-      level: prev ? 'pass' : 'info',
-    })
-  } catch (err) {
-    out.push({
-      id: 'idb',
-      label: '重啟後資料仍在',
-      detail: `IndexedDB 讀寫失敗：${String(err)}`,
-      level: 'fail',
-    })
+  const secure = location.protocol === 'https:' || location.hostname === 'localhost'
+  if (!secure) {
+    return { detail: '目前不是 HTTPS，瀏覽器不允許註冊（開發模式的預期行為）', level: 'fail' }
   }
+  const reg = await navigator.serviceWorker.getRegistration()
+  const active = reg?.active?.state === 'activated'
+  return {
+    detail: active ? '已啟用。開飛航模式後仍應能冷啟動' : '尚未啟用，重新載入一次再看',
+    level: active ? 'pass' : 'fail',
+  }
+}
 
-  // 4. 持久化儲存授權（降低被系統回收的機率，但不保證）
-  const persisted = await requestPersistence()
-  out.push({
-    id: 'persist',
-    label: '已取得持久化儲存授權',
-    detail: persisted
+const checkPersistence = async (): Outcome => {
+  const now = new Date().toISOString()
+  const prev = await loadProbe()
+  const next: Probe = {
+    firstSeenAt: prev?.firstSeenAt ?? now,
+    lastSeenAt: now,
+    launchCount: (prev?.launchCount ?? 0) + 1,
+  }
+  await saveProbe(next)
+  return {
+    detail: prev
+      ? `第 ${next.launchCount} 次載入，首次寫入於 ${formatTime(next.firstSeenAt)}`
+      : '這是第 1 次寫入。完全關閉 App 再開，這個數字要變成 2',
+    level: prev ? 'pass' : 'info',
+  }
+}
+
+const checkPersistGrant = async (): Outcome => {
+  const granted = await requestPersistence()
+  return {
+    detail: granted
       ? '系統較不會在空間不足時回收本 App 資料'
       : '未取得授權。資料仍可用，但更依賴定期備份 —— 這是選擇 PWA 的已知代價',
-    level: persisted ? 'pass' : 'warn',
-  })
+    level: granted ? 'pass' : 'warn',
+  }
+}
 
-  // 5. 儲存空間
+const checkQuota = async (): Outcome => {
   const est = await storageEstimate()
-  out.push({
-    id: 'quota',
-    label: '可用儲存空間',
+  return {
     detail: est
       ? `已用 ${formatBytes(est.usage)} / 可用 ${formatBytes(est.quota)}`
       : '此瀏覽器不提供空間資訊',
     level: 'info',
-  })
+  }
+}
 
-  // 6. 分享檔案能力（報表匯出的主要路徑）
-  const share = canShareFiles()
-  out.push({
-    id: 'share',
-    label: '原生分享面板可送出檔案',
-    detail: share
+const checkShare = async (): Outcome => {
+  const ok = canShareFiles()
+  return {
+    detail: ok
       ? '報表可直接存到「檔案」/ iCloud Drive，或送 AirDrop / LINE'
       : '不支援。匯出會退回瀏覽器下載，在 iOS standalone 下可能失敗',
-    level: share ? 'pass' : 'warn',
-  })
-
-  out.push({
-    id: 'platform',
-    label: '裝置',
-    detail: `${isIos() ? 'iOS / iPadOS' : '非 iOS'}　${screen.width}×${screen.height} @${devicePixelRatio}x`,
-    level: 'info',
-  })
-
-  return out
+    level: ok ? 'pass' : 'warn',
+  }
 }
+
+const checkPlatform = async (): Outcome => ({
+  detail: `${isIos() ? 'iOS / iPadOS' : '非 iOS'}\u3000${screen.width}\u00d7${screen.height} @${devicePixelRatio}x`,
+  level: 'info',
+})
