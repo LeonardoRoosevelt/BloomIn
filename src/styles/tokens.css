@@ -1,0 +1,135 @@
+/*
+ * BloomIn Design Tokens — 單一真實來源。
+ *
+ * 硬性規則：任何元件都不得寫死色碼、間距或字級，一律引用此檔的 custom property。
+ * 這是「風格一致」的唯一保證機制，新增顏色必須先在此處登記。
+ */
+
+:root {
+  /* ── 品牌主色（靛藍） ─────────────────────────────── */
+  --brand-50: #eeeef8;
+  --brand-100: #d8d8ef;
+  --brand-300: #9997cf;
+  --brand-500: #5b5aae;
+  --brand-600: #4b4a9b;
+  --brand-700: #3b3a80;
+
+  /* ── 課程類型 accent 池（固定六色，飽和度與明度刻意對齊，任兩色並列都不打架） ── */
+  --accent-terracotta: #c0674b;
+  --accent-azure: #3f7cac;
+  --accent-moss: #6b8e5a;
+  --accent-ochre: #c99b3f;
+  --accent-wisteria: #8a6ba8;
+  --accent-celadon: #4e9e93;
+
+  /* ── 語意色 ───────────────────────────────────── */
+  --success: #4e8c5b;
+  --warning: #c08a2e;
+  --danger: #b4483f;
+
+  /* ── 表面與文字（暖灰中性底） ─────────────────────── */
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-sunken: #f2f0ec;
+  --border: #e6e2da;
+  --border-strong: #cfc9bd;
+
+  --text: #1f1d1a;
+  --text-secondary: #6b6660;
+  --text-tertiary: #9b958c;
+  --text-on-brand: #ffffff;
+
+  /* ── 間距階（4 的倍數，不得使用階梯外的值） ─────────── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* ── 圓角 ────────────────────────────────────── */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-full: 999px;
+
+  /* ── 陰影 ────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgb(31 29 26 / 0.06);
+  --shadow-md: 0 2px 8px rgb(31 29 26 / 0.08);
+  --shadow-lg: 0 8px 28px rgb(31 29 26 / 0.12);
+
+  /* ── 字級階梯 ─────────────────────────────────── */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+
+  /* 系統字型堆疊：iOS 上解析為蘋方（PingFang TC），離線可用且中文渲染最佳。
+     刻意不載入任何外部字型，避免離線時字型缺失。 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC',
+    'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  /* 金額與時間用等寬數字，欄位才會對齊 */
+  --font-numeric: ui-monospace, 'SF Mono', 'Menlo', monospace;
+
+  /* ── SVG 線條語言（icon 與圖表共用，不得個別覆寫） ───── */
+  --stroke-w: 1.5;
+
+  /* ── 動態 ────────────────────────────────────── */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+
+  /* ── 版面 ────────────────────────────────────── */
+  --tabbar-h: 56px;
+  --sidebar-w: 240px;
+  --content-max: 720px;
+  /* iPhone 瀏海／Home 指示條安全區 */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand-50: #24234a;
+    --brand-100: #2f2e5e;
+    --brand-300: #6564bb;
+    --brand-500: #8180cc;
+    --brand-600: #9594d6;
+    --brand-700: #adacE2;
+
+    /* accent 提亮約 15%，在深色底上維持同等辨識度 */
+    --accent-terracotta: #d98868;
+    --accent-azure: #6aa3ce;
+    --accent-moss: #8fb37c;
+    --accent-ochre: #dfb864;
+    --accent-wisteria: #ab8dc6;
+    --accent-celadon: #6cbfb3;
+
+    --success: #79b487;
+    --warning: #dbab55;
+    --danger: #d9746a;
+
+    --bg: #1a1917;
+    --surface: #232120;
+    --surface-sunken: #161514;
+    --border: #37342f;
+    --border-strong: #4d4941;
+
+    --text: #f2f0ec;
+    --text-secondary: #a8a29a;
+    --text-tertiary: #7a746c;
+    --text-on-brand: #16152b;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-md: 0 2px 8px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.5);
+  }
+}

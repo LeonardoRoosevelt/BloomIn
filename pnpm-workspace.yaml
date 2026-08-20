@@ -1,0 +1,4 @@
+# esbuild 的安裝腳本會連結對應平台的原生執行檔，Vite 需要它才能編譯。
+allowBuilds:
+  esbuild: true
+  sharp: true
