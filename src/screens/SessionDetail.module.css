@@ -1,0 +1,183 @@
+.backRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.backLabel {
+  color: var(--brand-600);
+  font-size: var(--fs-md);
+}
+
+.head {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--card-accent);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.headTop {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.date {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.time {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xl);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--sp-2);
+}
+
+.topic {
+  font-size: var(--fs-md);
+}
+
+.topicEmpty {
+  color: var(--text-tertiary);
+}
+
+.note {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+  white-space: pre-wrap;
+}
+
+.headActions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.headActions > * {
+  flex: 1;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ── 點名列 ─────────────────────────────────── */
+
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.student {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+}
+
+.studentTop {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.studentName {
+  font-size: var(--fs-lg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.money {
+  margin-inline-start: auto;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-lg);
+  flex-shrink: 0;
+}
+
+.moneyMuted {
+  color: var(--text-tertiary);
+}
+
+.timeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.timeValue {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.adjusted {
+  color: var(--brand-600);
+}
+
+.adjustBtn {
+  margin-inline-start: auto;
+  color: var(--brand-600);
+  font-size: var(--fs-sm);
+  min-height: 32px;
+  padding: 0 var(--sp-2);
+}
+
+.rowNote {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-tertiary);
+  white-space: pre-wrap;
+}
+
+/* ── 結算 ───────────────────────────────────── */
+
+.totals {
+  margin-top: var(--sp-5);
+  background: var(--surface-sunken);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4);
+}
+
+.totalsRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.totalsRow + .totalsRow {
+  margin-top: var(--sp-2);
+}
+
+.totalsValue {
+  margin-inline-start: auto;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.grand {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+
+.bulk {
+  margin-bottom: var(--sp-4);
+}

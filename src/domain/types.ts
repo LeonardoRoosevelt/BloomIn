@@ -1,3 +1,5 @@
+import { newId } from '../lib/id'
+
 /**
  * BloomIn 領域模型。
  *
@@ -123,18 +125,40 @@ export interface AppState {
   attendances: Attendance[]
 }
 
+/**
+ * 首次啟動時預先建立幾個常見課程類型。
+ *
+ * 沒有課程類型就無法建課，讓使用者一進來面對空白清單等於卡住；
+ * 這幾筆是可以直接改名、改價或刪除的起點，不是硬編死的規則。
+ */
+function seedCourseTypes(defaultRate: number): CourseType[] {
+  return [
+    { name: '素描', accent: 'terracotta' as const },
+    { name: '水彩', accent: 'azure' as const },
+    { name: '兒童繪畫班', accent: 'ochre' as const },
+  ].map((c) => ({
+    id: newId(),
+    name: c.name,
+    hourlyRate: defaultRate,
+    chargeOnAbsence: false,
+    accent: c.accent,
+    archived: false,
+  }))
+}
+
 export function createInitialState(): AppState {
+  const defaultHourlyRate = 500
   return {
     schemaVersion: SCHEMA_VERSION,
     settings: {
       studioName: '',
       teacherName: '',
-      defaultHourlyRate: 500,
+      defaultHourlyRate,
       rounding: 'nearest15',
       backupReminderDays: 7,
       lastBackupAt: null,
     },
-    courseTypes: [],
+    courseTypes: seedCourseTypes(defaultHourlyRate),
     students: [],
     sessions: [],
     attendances: [],

@@ -15,7 +15,8 @@ export function SegmentedControl<T extends string>({
   ariaLabel,
 }: {
   segments: readonly Segment<T>[]
-  value: T
+  /** null 代表尚未選擇（例如學生還沒點名），此時所有選項都不亮起 */
+  value: T | null
   onChange: (next: T) => void
   ariaLabel: string
 }) {

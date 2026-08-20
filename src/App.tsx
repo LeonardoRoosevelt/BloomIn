@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell'
 import { useRoute } from './lib/router'
 import { useStore } from './store/useStore'
 import { Today } from './screens/Today'
+import { SessionDetail } from './screens/SessionDetail'
 import { Calendar } from './screens/Calendar'
 import { Students } from './screens/Students'
 import { Billing } from './screens/Billing'
@@ -23,7 +24,7 @@ export function App() {
   return (
     <AppShell>
       {route.name === 'today' && <Today />}
-      {route.name === 'session' && <Today />}
+      {route.name === 'session' && <SessionDetail sessionId={route.id} />}
       {route.name === 'calendar' && <Calendar />}
       {(route.name === 'students' || route.name === 'student') && <Students />}
       {route.name === 'billing' && <Billing />}

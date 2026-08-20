@@ -13,8 +13,10 @@ export function Field({
   children,
 }: {
   label: string
-  hint?: string
-  error?: string
+  // 顯式加上 undefined：exactOptionalPropertyTypes 下，React 元件常會傳入
+  // 條件運算得到的 undefined，這是預期用法而非錯誤
+  hint?: string | undefined
+  error?: string | undefined
   children: ReactNode
 }) {
   return (
