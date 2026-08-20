@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={s.shell}>
       <nav className={s.nav} aria-label="主導覽">
         <div className={`${s.brand} ${s.tabletOnly}`}>
-          <img src="/icons/logo.svg" alt="" className={s.brandMark} />
+          <img src={`${import.meta.env.BASE_URL}icons/logo.svg`} alt="" className={s.brandMark} />
           BloomIn
         </div>
         {NAV.map(({ route: target, label, Icon, covers }) => {

@@ -18,13 +18,18 @@ pnpm test            # 計費引擎測試
 Service Worker 只能在 HTTPS 下註冊，所以必須把 `dist/` 靜態檔案放上一個 HTTPS 網址才能安裝成 App。
 託管的只是程式碼，資料仍然 100% 留在裝置上。
 
-推薦 Cloudflare Pages（免費、根目錄部署，`vite.config.ts` 的 `base` 已設為 `/`）：
+本專案部署到 **GitHub Pages 專案頁**：`https://<user>.github.io/BloomIn/`。
+推送到 `main` 後由 `.github/workflows/deploy.yml` 自動建置並發布（測試沒過就不會部署）。
 
-- Build command: `pnpm build`
-- Output directory: `dist`
+首次設定：在 repo 的 Settings → Pages → Source 選 **GitHub Actions**。
 
-若改用 GitHub Pages 專案頁，網址會多一層路徑，需把 `vite.config.ts` 的 `base` 改成 `'/BloomIn/'`，
-並同步調整 manifest 的 `start_url` 與 `scope`。
+### 改網址要動的地方
+
+`vite.config.ts` 的 `base` 是唯一的來源，路由與資源路徑都由 `import.meta.env.BASE_URL` 推導。
+但 manifest 的 `start_url` / `scope` 與 workbox 的 `navigateFallback` 目前寫死同一個值，改 `base` 時要一起改。
+
+> ⚠️ **換網址等於換掉瀏覽器儲存區，資料不會跟著搬。**
+> 真的要換：先在舊網址匯出備份 → 開新網址 → 匯入還原。
 
 ## 安裝到 iPhone / iPad
 
