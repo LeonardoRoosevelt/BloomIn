@@ -34,7 +34,7 @@ export function BackupBanner() {
           {days === null ? '尚未備份過資料' : `已 ${days} 天沒有備份`}
         </span>
         <span className={s.detail}>
-          刪除主畫面圖示或清除網站資料會讓紀錄消失且無法復原。
+          刪除主畫面圖示或清除網站資料會讓紀錄消失且無法復原。照片需另外在設定頁逐位學生備份。
         </span>
       </span>
       <IconChevronRight size={18} />

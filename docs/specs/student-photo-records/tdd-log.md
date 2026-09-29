@@ -1013,3 +1013,21 @@ gherkin／coverage 門禁 PASS。
       Tests  144 passed (144)
 ```
 gherkin／coverage／tdd 門禁 PASS；build 成功。
+
+## 單元 4 — 備份提醒與 README 說明照片需另外備份
+規格：`coverage.md` Happy Path 新增「老師看到未備份的常駐提醒橫幅」條目；`.feature` 新增 Scenario「備份提醒說明照片需另外備份（Happy Path）」。gherkin／coverage 門禁 PASS。
+### Red
+測試：新檔 `src/components/BackupBanner.test.tsx`（有學生、從未備份，所以橫幅會出現）
+```
+   × 備份提醒橫幅 > 備份提醒說明照片需另外備份（Happy Path） 90ms
+     → expected '尚未備份過資料刪除主畫面圖示或清除網站資料會讓紀錄消失且無法復原。' to contain '照片需另外在設定頁逐位學生備份'
+```
+失敗類型：功能未實作
+### Green
+- `src/components/BackupBanner.tsx`：說明文字末尾加「照片需另外在設定頁逐位學生備份。」，沿用既有的 detail 行，不改版面與出現條件。
+- `README.md`「⚠️ 資料保存」補一段（文件，無測試）：照片不在 JSON 資料備份內；在「設定 → 照片備份」逐位學生匯出 zip（含未歸屬的照片）；換網址或換裝置時 JSON 與各學生的 zip 都要搬移，先還原 JSON 再逐一匯入 zip（只補不蓋）。
+```
+ Test Files  18 passed (18)
+      Tests  145 passed (145)
+```
+build 成功。

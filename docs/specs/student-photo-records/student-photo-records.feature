@@ -234,6 +234,13 @@ Feature: 學生照片紀錄本
       And zip 含 photos/p1.jpg 與 photos/p2.jpg，不含 "p3" 的圖檔
       And kv 的 photoBackupAt:s1 更新為匯出時間，photoBackupAt:s2 不變
 
+    # coverage: Happy Path / 備份提醒提示照片需另外備份
+    @happy-path
+    Scenario: 備份提醒說明照片需另外備份（Happy Path）
+      Given students 中有學生，且從未備份資料
+      When 畫面上方顯示備份提醒
+      Then 提醒中說明「照片需另外在設定頁逐位學生備份」
+
     # coverage: Happy Path / 照片備份區的未歸屬照片
     @happy-path
     Scenario: 未歸屬的照片可以單獨匯出（Happy Path）
