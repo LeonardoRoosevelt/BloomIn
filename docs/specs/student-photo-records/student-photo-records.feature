@@ -138,6 +138,15 @@ Feature: 學生照片紀錄本
       When 老師開啟學生 "ghost" 的照片紀錄本
       Then 顯示「找不到這位學生」
 
+    # coverage: Error Handling / 讀取照片失敗
+    @error
+    Scenario: 讀取照片失敗時顯示錯誤（Error Handling）
+      Given students 中存在 id 為 "s1" 的學生
+      And 瀏覽器讀取 photos 時發生錯誤
+      When 老師開啟學生 "s1" 的照片紀錄本
+      Then 顯示「無法讀取照片」的錯誤訊息
+      And 不顯示「還沒有照片」的空狀態
+
   Rule: 照片備份是獨立的 zip，匯入只做合併且絕不覆蓋
 
     # coverage: Happy Path / 匯出照片備份

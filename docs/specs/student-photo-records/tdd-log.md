@@ -563,3 +563,20 @@ $ pnpm test
       Tests  115 passed (115)
 ```
 既有「缺少圖檔的項目被略過（Error Handling）」仍綠：結構合法但 zip 裡沒有該圖檔，仍是略過該張。
+
+## Fix C4 — 讀取照片失敗時顯示錯誤（Error Handling）（新 Scenario）
+規格：`coverage.md` Error Handling 新增「開啟紀錄本時讀取照片失敗」條目；`.feature` 新增 Scenario「讀取照片失敗時顯示錯誤（Error Handling）」（@error）。gherkin／coverage 門禁 PASS。
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 讀取照片失敗時顯示錯誤（Error Handling）`（spy `IDBIndex.prototype.getAll` 拋 `DOMException('…','UnknownError')`）
+```
+   × 照片紀錄本畫面 > 讀取照片失敗時顯示錯誤（Error Handling） 1010ms
+     → Unable to find an element with the text: /無法讀取照片/. …
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+```
+失敗類型：功能未實作。`reload` 的錯誤變成未處理的 rejection，`groups` 永遠是 null，畫面一片空白。
+### Green
+變更：`src/screens/StudentPhotos.tsx`。`reload` 會捕捉錯誤並記入 `loadError`，畫面顯示「無法讀取照片」的 EmptyState（附錯誤原因與「重試」）；有錯誤時不顯示「還沒有照片」。
+```
+ Test Files  10 passed (10)
+      Tests  116 passed (116)
+```

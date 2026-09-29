@@ -99,6 +99,18 @@ describe('照片紀錄本畫面', () => {
     expect(await screen.findByText('找不到這位學生')).toBeTruthy()
   })
 
+  it('讀取照片失敗時顯示錯誤（Error Handling）', async () => {
+    // 瀏覽器讀取 photos 時發生錯誤（IndexedDB 的外部邊界）
+    vi.spyOn(IDBIndex.prototype, 'getAll').mockImplementation(() => {
+      throw new DOMException('Internal error reading the database.', 'UnknownError')
+    })
+
+    render(<StudentPhotos studentId="s1" />)
+
+    expect(await screen.findByText(/無法讀取照片/)).toBeTruthy()
+    expect(screen.queryByText('還沒有照片')).toBeNull()
+  })
+
   it('檢視照片原尺寸（Happy Path）', async () => {
     await seedPhotos(
       photoRecord({ id: 'p1', width: 2000, recordDate: '2024-03-15', caption: '上學期簽到卡 第 1 頁' }),

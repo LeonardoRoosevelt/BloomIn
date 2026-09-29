@@ -4,6 +4,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Field, Input, Textarea } from '../components/ui/Field'
 import { Sheet } from '../components/ui/Sheet'
 import {
+  IconAlert,
   IconChevronLeft,
   IconClose,
   IconEdit,
@@ -47,8 +48,17 @@ export function StudentPhotos({ studentId }: { studentId: string }) {
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null)
 
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  // 讀取失敗必須明說：若維持 null 會一片空白，若當成空陣列會誤顯示「還沒有照片」，
+  // 老師可能以為照片不見了
   const reload = useCallback(async () => {
-    setGroups(await listPhotosByMonth(studentId))
+    try {
+      setGroups(await listPhotosByMonth(studentId))
+      setLoadError(null)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    }
   }, [studentId])
 
   useEffect(() => {
@@ -155,7 +165,16 @@ export function StudentPhotos({ studentId }: { studentId: string }) {
         <p className={`${s.message} ${message.kind === 'ok' ? s.ok : s.err}`}>{message.text}</p>
       )}
 
-      {groups !== null && groups.length === 0 && (
+      {loadError !== null && (
+        <EmptyState
+          art={<IconAlert size={64} />}
+          title="無法讀取照片"
+          description={`${loadError}。照片可能仍在，請稍後重試或重新開啟 App。`}
+          action={<Button onClick={() => void reload()}>重試</Button>}
+        />
+      )}
+
+      {loadError === null && groups !== null && groups.length === 0 && (
         <EmptyState
           art={<IconPhoto size={64} />}
           title="還沒有照片"
