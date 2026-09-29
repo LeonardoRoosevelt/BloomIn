@@ -644,3 +644,38 @@ $ pnpm test
       Tests  118 passed (118)
 $ pnpm build → ✓ built in 830ms
 ```
+
+---
+
+# 修正輪 2（verifier 回報 aecb319 引入的潛伏資料遺失）
+
+## Fix — 被較新版本取代後不會靜默遺失輸入（State）（新 Scenario）
+規格：`coverage.md` State Transitions 新增「讓出連線當下還有未寫入的變更」條目；`.feature` 新增 Scenario「被較新版本取代後不會靜默遺失輸入（State）」。gherkin／coverage 門禁 PASS。
+### Red
+測試：`src/App.superseded.test.tsx::資料庫被較新版本取代 > 被較新版本取代後不會靜默遺失輸入（State）`（jsdom＋fake-indexeddb）。流程：真正的 `<App />` hydrate 於 v2 → `updateSettings` 後不 flush，變更仍在 300ms 存檔延遲內 → 另一條連線 `openDB('bloomin', 3)` → 從 v3 讀 kv state、檢查提示畫面 → 再做一次變更並等過存檔延遲，收集 `unhandledRejection`。
+```
+   × 資料庫被較新版本取代 > 被較新版本取代後不會靜默遺失輸入（State） 121ms
+     → expected undefined to be '小花美術教室' // Object.is equality
+```
+失敗類型：功能未實作。讓出連線時直接 close，存檔延遲內的變更遺失（v3 讀不到任何 state）。
+### Green
+變更：
+- `src/store/db.ts`：新增 `onSuperseded({ unsavedState, superseded })`，只有一個註冊者。`blocking` 先同步呼叫 `unsavedState()`，有值就在 `event.target`（仍開著的原生連線）上建立 readwrite 交易 put 到 kv `state`，然後在 finally 中 `close()`、清 `dbPromise`、呼叫 `superseded()`。close 會等已建立的交易完成，較新版本的升級也會等它寫完；即使 put 拋錯，finally 仍保證讓出連線。
+- `src/store/useStore.ts`：新增 `superseded` 狀態。模組層向 db.ts 註冊掛鉤：交出 `pending`，讓出後清掉 timer／pending 並設 `superseded: true`。`flushPersist` 在 superseded 時直接丟棄 pending、不嘗試寫入。
+- `src/App.tsx`：superseded 時優先回傳全螢幕 `Superseded`（「BloomIn 已在其他分頁更新，請重新開啟 App」＋「重新載入」→ `location.reload()`），整個 AppShell 不渲染，擋住所有輸入。照指示不自動重新載入。
+
+設計理由：db.ts 直接在 blocking 事件中用原生 API 寫入，store 名稱與 key 只存在 db.ts；useStore 只負責「交出資料」與「接收通知」，不碰 IndexedDB。寫入必須在事件當下同步建立交易，放到 promise 之後連線就已關閉，所以不能沿用非同步的 `saveState`。
+```
+ Test Files  12 passed (12)
+      Tests  119 passed (119)
+```
+突變檢查（各自跑完即還原），證明後兩個 Then 有效：
+- 拿掉 `flushPersist` 的 superseded 防護：
+```
+     → expected [ Array(1) ] to deeply equal []     （未處理的 rejection 出現）
+```
+- 拿掉 App 的 `Superseded` 畫面：
+```
+     → Unable to find an element with the text: /BloomIn 已在其他分頁更新，請重新開啟 App/. …
+```
+還原後全套：`Test Files 12 passed (12) / Tests 119 passed (119)`；gherkin／coverage／tdd 門禁 PASS；build 成功。

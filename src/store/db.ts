@@ -31,6 +31,23 @@ export function onUpgradeBlocked(listener: () => void): () => void {
   return () => blockedListeners.delete(listener)
 }
 
+/*
+ * 讓出連線（本分頁被較新版本取代）。
+ * 讓出後本分頁再也無法讀寫，所以：讓出前把還沒存的 state 寫進去，讓出後通知畫面擋住輸入。
+ * 只有一個註冊者（useStore），用單一變數而非清單。
+ */
+interface SupersededHook {
+  /** 同步回傳尚未寫入的 state；沒有則回傳 null */
+  unsavedState: () => unknown
+  /** 已讓出連線 */
+  superseded: () => void
+}
+let supersededHook: SupersededHook | null = null
+
+export function onSuperseded(hook: SupersededHook): void {
+  supersededHook = hook
+}
+
 export function getDb(): Promise<IDBPDatabase> {
   dbPromise ??= openDB(DB_NAME, DB_VERSION, {
     // 依 oldVersion 增量升級：舊版使用者升級時只補缺的部分，kv 裡的資料原封不動
@@ -46,10 +63,18 @@ export function getDb(): Promise<IDBPDatabase> {
     },
     // 反過來，日後有更新版本要升級時，本分頁要主動讓出連線，不重演上面的卡住。
     // 必須在 versionchange 事件當下同步關閉，否則對方仍會收到 blocked。
-    // 關閉後本分頁已是舊版，之後的讀寫會失敗，重新開啟 App 即可。
     blocking(_currentVersion, _blockedVersion, event) {
-      ;(event.target as IDBDatabase).close()
-      dbPromise = null
+      const db = event.target as IDBDatabase
+      try {
+        // 還在存檔延遲內的變更：趁連線還開著同步建立寫入交易。
+        // close() 會等已建立的交易完成才真正關閉，較新版本的升級也就會等它寫完
+        const unsaved = supersededHook?.unsavedState() ?? null
+        if (unsaved !== null) db.transaction(STORE, 'readwrite').objectStore(STORE).put(unsaved, STATE_KEY)
+      } finally {
+        db.close()
+        dbPromise = null
+        supersededHook?.superseded()
+      }
     },
   })
   return dbPromise

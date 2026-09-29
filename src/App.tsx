@@ -20,10 +20,15 @@ export function App() {
   const hydrateError = useStore((st) => st.hydrateError)
   const hydrate = useStore((st) => st.hydrate)
   const upgradeBlocked = useStore((st) => st.upgradeBlocked)
+  const superseded = useStore((st) => st.superseded)
 
   useEffect(() => {
     void hydrate()
   }, [hydrate])
+
+  // 已把資料庫讓給較新版本：本分頁寫不進任何東西，整個畫面換成提示，
+  // 不讓人繼續輸入後靜默遺失。不自動重新載入，免得正在看的畫面無預警消失
+  if (superseded) return <Superseded />
 
   // 資料尚未從 IndexedDB 載入前不渲染畫面，避免先閃出空狀態再跳成有資料。
   // 唯一例外是升級被舊分頁擋住：這可能要等很久，必須說明原因，否則就是一片白畫面。
@@ -44,6 +49,19 @@ export function App() {
       {route.name === 'billing' && <Billing />}
       {route.name === 'settings' && <Settings />}
     </AppShell>
+  )
+}
+
+function Superseded() {
+  return (
+    <div style={{ padding: 'var(--sp-5)', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
+      <EmptyState
+        art={<IconAlert size={72} />}
+        title="BloomIn 已在其他分頁更新，請重新開啟 App"
+        description="這個畫面使用的是舊版，已無法儲存資料。離開前的最後變更已經存好。"
+        action={<Button onClick={() => location.reload()}>重新載入</Button>}
+      />
+    </div>
   )
 }
 

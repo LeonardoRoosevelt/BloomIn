@@ -10,7 +10,7 @@ import {
   type Student,
 } from '../domain/types'
 import { newId } from '../lib/id'
-import { loadRollback, loadState, onUpgradeBlocked, saveRollback, saveState } from './db'
+import { loadRollback, loadState, onSuperseded, onUpgradeBlocked, saveRollback, saveState } from './db'
 
 interface StoreState {
   data: AppState
@@ -19,6 +19,8 @@ interface StoreState {
   hydrateError: string | null
   /** 資料庫升級正被其他開著的舊版分頁擋住；舊連線關閉後會自動繼續載入 */
   upgradeBlocked: boolean
+  /** 本分頁已把資料庫讓給較新版本，無法再讀寫；畫面必須擋住輸入並請使用者重新開啟 */
+  superseded: boolean
 
   hydrate: () => Promise<void>
   /**
@@ -57,6 +59,7 @@ export const useStore = create<StoreState>((set) => ({
   hydrated: false,
   hydrateError: null,
   upgradeBlocked: false,
+  superseded: false,
 
   /**
    * 載入失敗時不得靜默 —— 之前這裡的例外會讓 App 停在完全空白的畫面，
@@ -238,11 +241,26 @@ function schedulePersist(state: AppState): void {
 
 export async function flushPersist(): Promise<void> {
   clearTimeout(timer)
+  // 已讓出連線：寫入必然失敗，只會變成未處理的錯誤；讓出前的最後變更已由 db.ts 寫入
+  if (useStore.getState().superseded) {
+    pending = null
+    return
+  }
   if (!pending) return
   const state = pending
   pending = null
   await saveState(state)
 }
+
+// 被較新版本取代時：先交出還沒存的 state 讓 db.ts 寫入，再標記 superseded 讓畫面擋住輸入
+onSuperseded({
+  unsavedState: () => pending,
+  superseded: () => {
+    clearTimeout(timer)
+    pending = null
+    useStore.setState({ superseded: true })
+  },
+})
 
 // iOS 可能不觸發 pagehide 就終止 App，visibilitychange 是最可靠的存檔時機。
 if (typeof document !== 'undefined') {

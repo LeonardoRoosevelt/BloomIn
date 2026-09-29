@@ -280,6 +280,15 @@ Feature: 學生照片紀錄本
     When 另一個分頁以版本 3 開啟資料庫
     Then 版本 3 的開啟不會被本分頁擋住
 
+  # coverage: State Transitions / 讓出連線時仍有未寫入的變更
+  @state
+  Scenario: 被較新版本取代後不會靜默遺失輸入（State）
+    Given App 以版本 2 開著資料庫，且有一筆剛修改、尚未寫入的資料
+    When 另一個分頁以版本 3 開啟資料庫
+    Then 版本 3 中讀得到剛才的修改
+    And 顯示「BloomIn 已在其他分頁更新，請重新開啟 App」並提供重新載入，擋住所有輸入
+    And 之後不再嘗試寫入，也沒有未處理的錯誤
+
   Rule: 與瀏覽器能力的串接失敗時要可預期
 
     # coverage: Integration Points / shareFile 匯出
