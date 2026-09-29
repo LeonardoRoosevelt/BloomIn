@@ -19,7 +19,7 @@ const NAV: readonly {
 }[] = [
   { route: { name: 'today' }, label: '今日', Icon: IconToday, covers: ['today', 'session'] },
   { route: { name: 'calendar' }, label: '課表', Icon: IconCalendar, covers: ['calendar'] },
-  { route: { name: 'students' }, label: '學生', Icon: IconStudents, covers: ['students', 'student'] },
+  { route: { name: 'students' }, label: '學生', Icon: IconStudents, covers: ['students', 'student', 'student-photos'] },
   { route: { name: 'billing' }, label: '帳務', Icon: IconBilling, covers: ['billing'] },
   { route: { name: 'settings' }, label: '設定', Icon: IconSettings, covers: ['settings'] },
 ]

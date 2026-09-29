@@ -195,6 +195,17 @@ export function IconNote(p: IconProps) {
   )
 }
 
+/** 照片紀錄本：相框裡的山與太陽。 */
+export function IconPhoto(p: IconProps) {
+  return (
+    <IconBase {...p}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="9" cy="9.5" r="1.75" />
+      <path d="M20.5 15.5l-4.8-4.8a1.5 1.5 0 0 0-2.1 0L5 19.3" />
+    </IconBase>
+  )
+}
+
 export function IconUser(p: IconProps) {
   return (
     <IconBase {...p}>

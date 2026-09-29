@@ -499,3 +499,30 @@ Error: Failed to resolve import "./StudentPhotos" from "src/screens/StudentPhoto
       Tests  98 passed (98)
 ```
 限制：Service Worker 離線快取（App 殼層能否離線開啟）不在此測試範圍，沿用既有 PWA 設定；真實 codec 在此以假 codec 取代。
+
+## 畫面接線（無對應 Scenario，未新增測試）
+規格的 UI 要求中，以下部分沒有對應的 Scenario。依「Scenario 是測試唯一來源」不另寫測試，以 `tsc` + 整套測試 + build 把關，並列入實機驗證清單：
+- `src/lib/router.tsx`：新增 `{ name: 'student-photos'; id }` ↔ `/students/<id>/photos`（`parseRoute` / `routePath`）
+- `src/App.tsx`、`src/components/AppShell.tsx`：切換畫面；「學生」分頁涵蓋 `student-photos`
+- `src/screens/StudentDetail.tsx`：動作按鈕下方「照片紀錄本 · N 張」入口（`countPhotos` 以 index 計數）
+- `src/components/PhotoBackupPanel.tsx` + `src/screens/Settings.tsx`：「照片備份」區（上次照片備份時間、匯出、匯入並顯示結果訊息、處理中停用）
+- `src/screens/StudentPhotos.tsx`：檢視器的「編輯日期與說明」Sheet；`ZoomableImage` 雙指縮放／雙擊切換；非預期的儲存錯誤顯示訊息
+- `src/components/icons/index.tsx`：新增 `IconPhoto`
+
+瀏覽器煙霧測試：以 sharp 產生測試 JPEG（含 EXIF orientation 6 的 4000x3000、8000x6000）準備在 headless Chrome 跑真實 codec，但 Chrome 在此 sandbox 內無法啟動（`Failed to create socket directory`、Crashpad `Operation not permitted`），未執行。
+
+## Refactor（全綠後）
+依指示不進行重構，建議列於回報，等使用者決定。
+
+## 最終狀態
+```
+$ python3 …/ec_gate.py tdd student-photo-records
+PASS 解析出 34 個 Scenario 標題
+PASS 找到 13 個測試檔案
+PASS 所有 Scenario 標題皆在測試檔案中出現
+SUMMARY: PASS
+
+$ pnpm test
+ Test Files  10 passed (10)
+      Tests  98 passed (98)
+```

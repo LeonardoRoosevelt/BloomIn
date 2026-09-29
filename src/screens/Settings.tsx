@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { ScreenHeader } from '../components/AppShell'
 import { BackupPanel } from '../components/BackupPanel'
 import { OfflineStatus } from '../components/OfflineStatus'
+import { PhotoBackupPanel } from '../components/PhotoBackupPanel'
 import { CourseTypeForm } from '../components/CourseTypeForm'
 import { Button } from '../components/ui/Button'
 import { Field, Input } from '../components/ui/Field'
@@ -152,6 +153,17 @@ export function Settings() {
         <p className={s.note}>
           資料只存在這台裝置。<strong>刪除主畫面圖示或清除網站資料，紀錄會一起消失且無法復原。</strong>
           匯出的備份檔請存到 iCloud Drive 或另一台裝置。
+        </p>
+      </section>
+
+      <section className={s.section}>
+        <div className={s.sectionHead}>
+          <h2 className={s.sectionTitle}>照片備份</h2>
+        </div>
+        <PhotoBackupPanel />
+        <p className={s.note}>
+          學生照片紀錄本的照片<strong>不在</strong>上面的資料備份裡，需要另外匯出。
+          匯入照片備份只會補上缺少的照片，不會覆蓋或刪除這台裝置上的照片。
         </p>
       </section>
 

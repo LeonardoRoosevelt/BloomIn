@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type TouchList } from 'react'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Field, Input, Textarea } from '../components/ui/Field'
@@ -6,7 +6,8 @@ import { Sheet } from '../components/ui/Sheet'
 import {
   IconChevronLeft,
   IconClose,
-  IconNote,
+  IconEdit,
+  IconPhoto,
   IconPlus,
   IconStudents,
   IconTrash,
@@ -21,6 +22,7 @@ import {
   describeAddResult,
   getPhoto,
   listPhotosByMonth,
+  updatePhoto,
   type Photo,
   type PhotoSummary,
 } from '../store/photos'
@@ -88,6 +90,9 @@ export function StudentPhotos({ studentId }: { studentId: string }) {
       })
       setPicked(null)
       await reload()
+    } catch (err) {
+      // 空間不足與無法解碼已在 addPhotoFiles 內回報；走到這裡是意料之外的錯誤，不能默默吞掉
+      setMessage({ kind: 'err', text: `儲存失敗：${err instanceof Error ? err.message : String(err)}` })
     } finally {
       setSaving(false)
     }
@@ -152,7 +157,7 @@ export function StudentPhotos({ studentId }: { studentId: string }) {
 
       {groups !== null && groups.length === 0 && (
         <EmptyState
-          art={<IconNote size={64} />}
+          art={<IconPhoto size={64} />}
           title="還沒有照片"
           description="把紙本簽到簿、作品紀錄卡拍下來，依日期整理在這裡。"
           action={addButton}
@@ -184,6 +189,7 @@ export function StudentPhotos({ studentId }: { studentId: string }) {
         <Viewer
           photoId={viewingId}
           onClose={() => setViewingId(null)}
+          onChanged={() => void reload()}
           onDeleted={() => {
             setViewingId(null)
             void reload()
@@ -262,14 +268,17 @@ function Thumb({ blob }: { blob: Blob }) {
 function Viewer({
   photoId,
   onClose,
+  onChanged,
   onDeleted,
 }: {
   photoId: string
   onClose: () => void
+  onChanged: () => void
   onDeleted: () => void
 }) {
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [draft, setDraft] = useState<{ recordDate: string; caption: string } | null>(null)
   const url = useObjectUrl(photo?.blob ?? null)
 
   useEffect(() => {
@@ -283,17 +292,74 @@ function Viewer({
           <IconClose size={22} />
         </Button>
         <span className={s.viewerSpacer} />
+        <Button
+          variant="ghost"
+          iconOnly
+          aria-label="編輯"
+          disabled={photo === null}
+          onClick={() => photo && setDraft({ recordDate: photo.recordDate, caption: photo.caption })}
+        >
+          <IconEdit size={20} />
+        </Button>
         <Button variant="ghost" iconOnly aria-label="刪除" onClick={() => setConfirmingDelete(true)}>
           <IconTrash size={20} />
         </Button>
       </div>
-      <div className={s.viewerStage}>{url !== null && <img src={url} alt="原尺寸照片" />}</div>
+      {url !== null ? <ZoomableImage src={url} /> : <div className={s.viewerStage} />}
       {photo && (
         <div className={s.viewerInfo}>
           <div className={s.viewerDate}>{formatDateLong(photo.recordDate)}</div>
           {photo.caption !== '' && <p className={s.viewerCaption}>{photo.caption}</p>}
         </div>
       )}
+
+      <Sheet
+        open={draft !== null}
+        onClose={() => setDraft(null)}
+        title="編輯日期與說明"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDraft(null)}>
+              取消
+            </Button>
+            <Button
+              disabled={draft === null || draft.recordDate === ''}
+              onClick={() => {
+                if (!draft) return
+                // 只改日期與說明，照片本身不動
+                void updatePhoto(photoId, { recordDate: draft.recordDate, caption: draft.caption.trim() })
+                  .then(() => getPhoto(photoId))
+                  .then((p) => {
+                    setPhoto(p ?? null)
+                    setDraft(null)
+                    onChanged()
+                  })
+              }}
+            >
+              儲存
+            </Button>
+          </>
+        }
+      >
+        {draft && (
+          <>
+            <Field label="紀錄日期" hint="紙本紀錄上的日期，不是拍照的日期。">
+              <Input
+                type="date"
+                value={draft.recordDate}
+                onChange={(e) => setDraft({ ...draft, recordDate: e.target.value })}
+              />
+            </Field>
+            <Field label="說明">
+              <Textarea
+                rows={2}
+                value={draft.caption}
+                onChange={(e) => setDraft({ ...draft, caption: e.target.value })}
+              />
+            </Field>
+          </>
+        )}
+      </Sheet>
 
       {/* 實體刪除無法復原，一定要二次確認 */}
       <Sheet
@@ -320,4 +386,83 @@ function Viewer({
       </Sheet>
     </div>
   )
+}
+
+const MAX_ZOOM = 4
+
+/**
+ * 可雙指縮放的原圖（看清手寫字跡用）。
+ *
+ * index.html 的 viewport 設了 user-scalable=no（避免點名時誤觸整頁縮放），
+ * 加入主畫面後瀏覽器原生的雙指縮放不可用，所以這裡自己處理：
+ * touch-action 把單指平移留給瀏覽器捲動、雙指交給程式；放大時把圖片實際放大，
+ * 外框變成可捲動區域，平移就是原生捲動，不必自己算慣性。雙擊在原尺寸與放大之間切換。
+ */
+function ZoomableImage({ src }: { src: string }) {
+  const stageRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [zoom, setZoom] = useState(1)
+  // 未放大時圖片「符合畫面」的尺寸；放大倍率以它為基準
+  const fitSize = useRef<{ width: number; height: number } | null>(null)
+  const pinch = useRef<{ distance: number; zoom: number } | null>(null)
+
+  // Safari 分頁模式會無視 user-scalable=no，雙指會同時縮放整頁；
+  // gesturestart 是 Safari 專屬事件，要用非 passive 的原生監聽才擋得下
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const block = (e: Event) => e.preventDefault()
+    el.addEventListener('gesturestart', block, { passive: false })
+    return () => el.removeEventListener('gesturestart', block)
+  }, [])
+
+  function measureFit() {
+    const img = imgRef.current
+    if (img && zoom === 1) fitSize.current = { width: img.clientWidth, height: img.clientHeight }
+  }
+
+  const size =
+    zoom > 1 && fitSize.current
+      ? { width: fitSize.current.width * zoom, height: fitSize.current.height * zoom }
+      : undefined
+
+  return (
+    <div
+      ref={stageRef}
+      className={s.viewerStage}
+      onTouchStart={(e) => {
+        if (e.touches.length !== 2) return
+        measureFit()
+        pinch.current = { distance: touchDistance(e.touches), zoom }
+      }}
+      onTouchMove={(e) => {
+        const start = pinch.current
+        if (e.touches.length !== 2 || !start) return
+        const next = (start.zoom * touchDistance(e.touches)) / start.distance
+        setZoom(Math.min(MAX_ZOOM, Math.max(1, next)))
+      }}
+      onTouchEnd={(e) => {
+        if (e.touches.length < 2) pinch.current = null
+      }}
+      onDoubleClick={() => {
+        measureFit()
+        setZoom((z) => (z > 1 ? 1 : 2.5))
+      }}
+    >
+      <img
+        ref={imgRef}
+        src={src}
+        alt="原尺寸照片"
+        onLoad={measureFit}
+        className={size ? s.zoomed : undefined}
+        style={size}
+      />
+    </div>
+  )
+}
+
+function touchDistance(touches: TouchList): number {
+  const a = touches[0]!
+  const b = touches[1]!
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
 }

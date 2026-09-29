@@ -30,6 +30,12 @@ export async function listAllPhotos(): Promise<Photo[]> {
   return db.getAll(PHOTOS_STORE) as Promise<Photo[]>
 }
 
+/** 學生詳情頁入口顯示的張數；用索引計數，不必把照片讀出來。 */
+export async function countPhotos(studentId: string): Promise<number> {
+  const db = await getDb()
+  return db.countFromIndex(PHOTOS_STORE, 'studentId', studentId)
+}
+
 /** 列表用的照片：刻意不帶原圖，畫面只能拿縮圖來顯示。 */
 export type PhotoSummary = Omit<Photo, 'blob'>
 

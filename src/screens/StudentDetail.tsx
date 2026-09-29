@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StatusTag } from '../components/StatusTag'
 import { StudentForm } from '../components/StudentForm'
 import { Button } from '../components/ui/Button'
@@ -6,7 +6,15 @@ import { Card, Row } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Pill } from '../components/ui/Pill'
 import { StatTiles } from '../components/ui/StatTiles'
-import { IconChevronLeft, IconEdit, IconPhone, IconStudents, IconUser } from '../components/icons'
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconEdit,
+  IconPhone,
+  IconPhoto,
+  IconStudents,
+  IconUser,
+} from '../components/icons'
 import { formatMinutes } from '../domain/billing'
 import {
   attendancesOfStudent,
@@ -17,6 +25,7 @@ import {
 import { formatDate, formatMonth } from '../lib/date'
 import { formatMoney } from '../lib/format'
 import { goBack, navigate } from '../lib/router'
+import { countPhotos } from '../store/photos'
 import { useStore } from '../store/useStore'
 import s from './StudentDetail.module.css'
 
@@ -24,6 +33,12 @@ export function StudentDetail({ studentId }: { studentId: string }) {
   const data = useStore((st) => st.data)
   const updateStudent = useStore((st) => st.updateStudent)
   const [editing, setEditing] = useState(false)
+  // null = 還在計算；照片在獨立的 store，不在 state 裡，要另外查
+  const [photoCount, setPhotoCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    void countPhotos(studentId).then(setPhotoCount)
+  }, [studentId])
 
   const student = data.students.find((x) => x.id === studentId)
   if (!student) {
@@ -109,6 +124,18 @@ export function StudentDetail({ studentId }: { studentId: string }) {
           {student.archived ? '取消封存' : '封存'}
         </Button>
       </div>
+
+      <Button
+        variant="secondary"
+        block
+        className={s.photosEntry}
+        onClick={() => navigate({ name: 'student-photos', id: student.id })}
+      >
+        <IconPhoto size={18} />
+        <span className={s.photosLabel}>照片紀錄本</span>
+        {photoCount !== null && <span className={s.photosCount}>{photoCount} 張</span>}
+        <IconChevronRight size={18} />
+      </Button>
 
       {/* 刻意不提供刪除：學生的出席紀錄是既有帳務的一部分，
           刪掉會讓過去的月結單對不起來。封存只是從清單隱藏。 */}

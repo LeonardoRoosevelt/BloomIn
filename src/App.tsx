@@ -7,6 +7,7 @@ import { SessionDetail } from './screens/SessionDetail'
 import { Calendar } from './screens/Calendar'
 import { Students } from './screens/Students'
 import { StudentDetail } from './screens/StudentDetail'
+import { StudentPhotos } from './screens/StudentPhotos'
 import { Billing } from './screens/Billing'
 import { Settings } from './screens/Settings'
 import { EmptyState } from './components/ui/EmptyState'
@@ -37,6 +38,7 @@ export function App() {
       {route.name === 'calendar' && <Calendar />}
       {route.name === 'students' && <Students />}
       {route.name === 'student' && <StudentDetail studentId={route.id} />}
+      {route.name === 'student-photos' && <StudentPhotos studentId={route.id} />}
       {route.name === 'billing' && <Billing />}
       {route.name === 'settings' && <Settings />}
     </AppShell>

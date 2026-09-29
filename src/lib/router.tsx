@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 /**
  * 極簡路由。
  *
- * 不引入 react-router：本 App 只有七個畫面，且需要的只是「路徑 ↔ 畫面」對應。
+ * 不引入 react-router：本 App 只有八個畫面，且需要的只是「路徑 ↔ 畫面」對應。
  * 使用真正的 History API 而非 hash，讓 iOS standalone 模式下的邊緣滑動返回可以運作。
  */
 /**
@@ -28,6 +28,7 @@ export type Route =
   | { name: 'calendar' }
   | { name: 'students' }
   | { name: 'student'; id: string }
+  | { name: 'student-photos'; id: string }
   | { name: 'billing' }
   | { name: 'settings' }
 
@@ -41,7 +42,8 @@ export function parseRoute(pathname: string): Route {
     case 'calendar':
       return { name: 'calendar' }
     case 'students':
-      return seg[1] ? { name: 'student', id: seg[1] } : { name: 'students' }
+      if (!seg[1]) return { name: 'students' }
+      return seg[2] === 'photos' ? { name: 'student-photos', id: seg[1] } : { name: 'student', id: seg[1] }
     case 'billing':
       return { name: 'billing' }
     case 'settings':
@@ -63,6 +65,8 @@ export function routePath(route: Route): string {
       return '/students'
     case 'student':
       return `/students/${route.id}`
+    case 'student-photos':
+      return `/students/${route.id}/photos`
     case 'billing':
       return '/billing'
     case 'settings':

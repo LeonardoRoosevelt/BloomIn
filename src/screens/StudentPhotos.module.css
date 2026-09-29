@@ -105,14 +105,25 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
+  /* 單指平移交給瀏覽器捲動，雙指縮放交給程式（見 ZoomableImage） */
+  touch-action: pan-x pan-y;
 }
 
+/* 用 margin: auto 置中而非 justify-content：放大超出外框時，
+   auto margin 會歸零讓圖片從起點開始，左上角不會被裁掉而捲不到 */
 .viewerStage img {
   margin: auto;
   display: block;
   max-width: 100%;
   max-height: 100%;
+}
+
+.viewerStage img.zoomed {
+  max-width: none;
+  max-height: none;
+  flex-shrink: 0;
 }
 
 .viewerInfo {

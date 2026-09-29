@@ -113,3 +113,21 @@
 .rateLabel {
   color: var(--text-tertiary);
 }
+
+/* ── 照片紀錄本入口 ─────────────────────────── */
+
+.photosEntry {
+  margin-top: var(--sp-2);
+}
+
+.photosLabel {
+  flex: 1;
+  text-align: start;
+}
+
+.photosCount {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
