@@ -1,0 +1,229 @@
+import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
+import { shareFile, type ShareOutcome } from '../lib/share'
+import { getDb, PHOTOS_STORE, savePhotoBackupAt } from './db'
+import { isQuotaError, listAllPhotos, type Photo } from './photos'
+
+/**
+ * 照片備份檔（zip）。
+ *
+ * 與 JSON 資料備份分開：照片體積大，塞進 JSON 會讓日常的資料備份變得又慢又大。
+ * manifest 沿用資料備份的信封思路 —— 匯入時要能分辨「這是 BloomIn 的照片備份」
+ * 與「某個剛好也是 zip 的檔案」，並看得出格式版本。
+ */
+export const PHOTO_BACKUP_APP_ID = 'bloomin-photos'
+export const PHOTO_BACKUP_SCHEMA_VERSION = 1
+
+export interface PhotoManifestEntry {
+  id: string
+  studentId: string
+  recordDate: string
+  caption: string
+  width: number
+  height: number
+  createdAt: string
+  /** zip 內原圖的路徑 */
+  file: string
+  /** zip 內縮圖的路徑；一併備份，還原後不必在手機上重新解碼原圖產生縮圖 */
+  thumbFile: string
+}
+
+export interface PhotoManifest {
+  app: typeof PHOTO_BACKUP_APP_ID
+  schemaVersion: number
+  exportedAt: string
+  photos: PhotoManifestEntry[]
+}
+
+/** 檔名含日期時間，同一天多次備份不會互相覆蓋。 */
+export function photoBackupFileName(now: Date): string {
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  return `bloomin-照片備份-${y}${m}${d}-${hh}${mm}.zip`
+}
+
+export async function exportPhotoBackup(now: Date): Promise<ShareOutcome> {
+  const photos = await listAllPhotos()
+  const files: Zippable = {}
+  const entries: PhotoManifestEntry[] = []
+  for (const p of photos) {
+    const file = `photos/${p.id}.jpg`
+    const thumbFile = `thumbs/${p.id}.jpg`
+    files[file] = new Uint8Array(await p.blob.arrayBuffer())
+    files[thumbFile] = new Uint8Array(await p.thumb.arrayBuffer())
+    entries.push({
+      id: p.id,
+      studentId: p.studentId,
+      recordDate: p.recordDate,
+      caption: p.caption,
+      width: p.width,
+      height: p.height,
+      createdAt: p.createdAt,
+      file,
+      thumbFile,
+    })
+  }
+  const manifest: PhotoManifest = {
+    app: PHOTO_BACKUP_APP_ID,
+    schemaVersion: PHOTO_BACKUP_SCHEMA_VERSION,
+    exportedAt: now.toISOString(),
+    photos: entries,
+  }
+  files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
+  // 照片已是 JPEG，再壓縮幾乎沒有效果，只會多花時間：level 0 即 store 模式
+  const zip = zipSync(files, { level: 0 })
+  const file = new File([zip], photoBackupFileName(now), { type: 'application/zip' })
+  const outcome = await shareFile(file, 'BloomIn 照片備份')
+  // 只有真的送出去才算備份完成；取消了還記時間，會讓人以為照片已經有備份
+  if (outcome !== 'cancelled') await savePhotoBackupAt(now.toISOString())
+  return outcome
+}
+
+export function describeExport(outcome: ShareOutcome): string {
+  switch (outcome) {
+    case 'cancelled':
+      return '已取消，這次沒有備份照片。'
+    case 'shared':
+      return '已送出照片備份。請確認它真的存到了「檔案」或 iCloud Drive。'
+    case 'downloaded':
+      return '已下載照片備份。'
+  }
+}
+
+export type PhotoImportResult =
+  | {
+      ok: true
+      added: number
+      /** 本機已有同 id 的照片而略過 —— 重複匯入同一份備份不會產生重複 */
+      skippedExisting: number
+      /** manifest 有列、zip 裡卻沒有圖檔而略過的張數 */
+      missingFile: number
+      /** 空間不足而中止時，還沒匯入的張數（重新匯入同一份會跳過已存在的，可接續） */
+      noSpace: number
+      /** 新增的照片中，所屬學生目前不在資料裡的張數（照樣存入，還原資料備份後就會出現） */
+      orphaned: number
+    }
+  | { ok: false; error: string }
+
+/**
+ * 匯入照片備份：只做合併，絕不覆蓋本機既有的照片。
+ */
+export async function importPhotoBackup(
+  zipFile: Blob,
+  knownStudentIds: ReadonlySet<string>,
+): Promise<PhotoImportResult> {
+  const parsed = await parsePhotoBackup(zipFile)
+  if (!parsed.ok) return parsed
+  const { files, manifest } = parsed
+  const db = await getDb()
+  let added = 0
+  let skippedExisting = 0
+  let orphaned = 0
+  let missingFile = 0
+  let noSpace = 0
+  for (const [i, entry] of manifest.photos.entries()) {
+    // 本機版本可能在匯出後被編輯過，備份不能把它蓋回舊的
+    if ((await db.getKey(PHOTOS_STORE, entry.id)) !== undefined) {
+      skippedExisting++
+      continue
+    }
+    const blobBytes = files[entry.file]
+    const thumbBytes = files[entry.thumbFile]
+    // 少了圖檔就不是一張完整的照片：略過這張，不留下殘缺紀錄，其他照常匯入
+    if (!blobBytes || !thumbBytes) {
+      missingFile++
+      continue
+    }
+    const photo: Photo = {
+      id: entry.id,
+      studentId: entry.studentId,
+      recordDate: entry.recordDate,
+      caption: entry.caption,
+      blob: jpeg(blobBytes),
+      thumb: jpeg(thumbBytes),
+      width: entry.width,
+      height: entry.height,
+      createdAt: entry.createdAt,
+    }
+    try {
+      await db.put(PHOTOS_STORE, photo)
+    } catch (err) {
+      if (!isQuotaError(err)) throw err
+      // 空間滿了，後面的也存不進去；已匯入的保留，回報剩幾張
+      noSpace = manifest.photos.length - i
+      break
+    }
+    added++
+    // 不丟棄：使用者可能先匯入照片、後還原資料備份，順序不該決定照片的去留
+    if (!knownStudentIds.has(entry.studentId)) orphaned++
+  }
+  return { ok: true, added, skippedExisting, missingFile, noSpace, orphaned }
+}
+
+type ParsedBackup =
+  | { ok: true; files: Record<string, Uint8Array>; manifest: PhotoManifest }
+  | { ok: false; error: string }
+
+/**
+ * 在寫入任何一張照片之前，先確認整份檔案是看得懂的 BloomIn 照片備份。
+ * 沿用資料備份的原則：寧可拒絕一個其實沒問題的檔案，也不要寫進一堆看不懂的資料。
+ */
+async function parsePhotoBackup(zipFile: Blob): Promise<ParsedBackup> {
+  let files: Record<string, Uint8Array>
+  try {
+    files = unzipSync(new Uint8Array(await zipFile.arrayBuffer()))
+  } catch {
+    return { ok: false, error: '這不是有效的 zip 檔案，可能選錯檔案或檔案已損壞。' }
+  }
+  const manifestBytes = files['manifest.json']
+  if (!manifestBytes) {
+    return { ok: false, error: '這不是 BloomIn 的照片備份（缺少 manifest.json）。' }
+  }
+  let raw: unknown
+  try {
+    raw = JSON.parse(strFromU8(manifestBytes))
+  } catch {
+    return { ok: false, error: '照片備份的 manifest.json 已損壞。' }
+  }
+  if (typeof raw !== 'object' || raw === null) {
+    return { ok: false, error: '照片備份的 manifest.json 不是預期的格式。' }
+  }
+  const manifest = raw as Partial<PhotoManifest>
+  if (manifest.app !== PHOTO_BACKUP_APP_ID) {
+    return { ok: false, error: '這不是 BloomIn 的照片備份。' }
+  }
+  if (typeof manifest.schemaVersion !== 'number') {
+    return { ok: false, error: '照片備份缺少版本資訊，無法確認相容性。' }
+  }
+  if (manifest.schemaVersion > PHOTO_BACKUP_SCHEMA_VERSION) {
+    return {
+      ok: false,
+      error: `這個照片備份來自較新版本的 App（格式 v${manifest.schemaVersion}，目前支援到 v${PHOTO_BACKUP_SCHEMA_VERSION}）。請先更新 App。`,
+    }
+  }
+  if (!Array.isArray(manifest.photos)) {
+    return { ok: false, error: '照片備份的照片清單已損壞，為了避免寫入殘缺資料而中止。' }
+  }
+  return { ok: true, files, manifest: manifest as PhotoManifest }
+}
+
+function jpeg(bytes: Uint8Array): Blob {
+  return new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' })
+}
+
+export function describeImport(r: PhotoImportResult): string {
+  if (!r.ok) return r.error
+  if (r.noSpace > 0) {
+    return `裝置儲存空間不足，已匯入 ${r.added} 張、${r.noSpace} 張因空間不足未匯入。清出空間後重新匯入同一份備份，會從沒匯入的部分接續。`
+  }
+  const parts = [`已匯入：新增 ${r.added} 張`]
+  if (r.skippedExisting > 0) parts.push(`略過 ${r.skippedExisting} 張已存在`)
+  if (r.missingFile > 0) parts.push(`略過 ${r.missingFile} 張檔案缺失`)
+  let text = `${parts.join('、')}。`
+  if (r.orphaned > 0) {
+    text += `其中 ${r.orphaned} 張屬於目前找不到的學生，還原對應的資料備份後就會出現。`
+  }
+  return text
+}

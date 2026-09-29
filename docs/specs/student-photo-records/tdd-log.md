@@ -183,3 +183,173 @@ Error: Cannot find module './photos' imported from '.../src/store/photos.test.ts
  Test Files  7 passed (7)
       Tests  74 passed (74)
 ```
+
+## Slice 13 — 匯出照片備份（Happy Path）
+### Red
+測試：`src/store/photoBackup.test.ts::匯出照片備份 > 匯出照片備份（Happy Path）`（stub `navigator.canShare/share` 攔下送進分享面板的檔案，用 fflate `unzipSync` 解開檢查）
+```
+Error: Cannot find module './photoBackup' imported from '.../src/store/photoBackup.test.ts'
+```
+失敗類型：符號不存在
+### Green
+變更：新增 `src/store/photoBackup.ts`（`PhotoManifest`、`exportPhotoBackup`：`zipSync(level 0)` → `shareFile` → 記錄時間）；`src/store/db.ts` 加 `loadPhotoBackupAt` / `savePhotoBackupAt`（kv `photoBackupAt`）
+```
+ Test Files  8 passed (8)
+      Tests  75 passed (75)
+```
+
+## Slice 14 — 照片備份透過分享面板送出（Integration）
+### Red
+測試：`src/store/photoBackup.test.ts::匯出照片備份 > 照片備份透過分享面板送出（Integration）`
+```
+   × 匯出照片備份 > 照片備份透過分享面板送出（Integration） 4ms
+     → expected false to be true // Object.is equality
+```
+失敗類型：斷言失敗（檔名仍是暫定的 `bloomin-photos.zip`）
+### Green
+變更：`src/store/photoBackup.ts` — `photoBackupFileName(now)` → `bloomin-照片備份-YYYYMMDD-HHmm.zip`
+```
+ Test Files  8 passed (8)
+      Tests  76 passed (76)
+```
+
+## Slice 15 — 取消分享時不算備份完成（Error Handling）
+### Red
+測試：`src/store/photoBackup.test.ts::匯出照片備份 > 取消分享時不算備份完成（Error Handling）`（`navigator.share` 拋 `AbortError`，走真正的 `shareFile` → `'cancelled'`）
+```
+   × 匯出照片備份 > 取消分享時不算備份完成（Error Handling） 4ms
+     → expected '2026-09-29T06:05:00.000Z' to be '2026-09-01T00:00:00Z' // Object.is equality
+```
+失敗類型：斷言失敗（取消仍更新了 photoBackupAt）
+### Green
+變更：`src/store/photoBackup.ts` — 只有 outcome 非 `cancelled` 才 `savePhotoBackupAt`；新增 `describeExport`
+```
+ Test Files  8 passed (8)
+      Tests  77 passed (77)
+```
+
+## Slice 16 — 匯入照片備份（Happy Path）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 匯入照片備份（Happy Path）`（Given 的 zip 由測試以 fflate 依格式手工組成，不經匯出程式）
+```
+   × 匯入照片備份 > 匯入照片備份（Happy Path） 3ms
+     → (0 , importPhotoBackup) is not a function
+```
+失敗類型：符號不存在
+### Green
+變更：`src/store/photoBackup.ts` — `importPhotoBackup`（unzip → manifest → 逐筆 put）、`describeImport`；manifest 加 `thumbFile`（`thumbs/<id>.jpg`），匯出同步寫入縮圖（`thumbFile` 為必填型別欄位，匯出端必須跟著產出）
+```
+ Test Files  8 passed (8)
+      Tests  78 passed (78)
+```
+
+## Slice 17 — 已存在的照片在匯入時略過（Edge Case）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 已存在的照片在匯入時略過（Edge Case）`
+```
+   × 匯入照片備份 > 已存在的照片在匯入時略過（Edge Case） 4ms
+     → expected '備份版本' to be '本機版本' // Object.is equality
+```
+失敗類型：斷言失敗（備份版本覆蓋了本機版本）
+### Green
+變更：`src/store/photoBackup.ts` — 寫入前 `getKey` 檢查，已存在計入 `skippedExisting`；`describeImport` 附「略過 N 張已存在」
+```
+ Test Files  8 passed (8)
+      Tests  79 passed (79)
+```
+
+## Slice 18 — 找不到所屬學生的照片仍會匯入（Edge Case）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 找不到所屬學生的照片仍會匯入（Edge Case）`
+```
+   × 匯入照片備份 > 找不到所屬學生的照片仍會匯入（Edge Case） 6ms
+     → expected { ok: true, added: 1, …(1) } to match object { ok: true, added: 1, orphaned: 1 }
+```
+失敗類型：斷言失敗（照片有存入，但沒有回報孤立張數）
+### Green
+變更：`src/store/photoBackup.ts` — 以呼叫端傳入的 `knownStudentIds` 計算 `orphaned`，照片照樣寫入；`describeImport` 附「其中 K 張屬於目前找不到的學生，還原對應的資料備份後就會出現。」
+```
+ Test Files  8 passed (8)
+      Tests  80 passed (80)
+```
+
+## Slice 19 — 無效的照片備份被整份拒絕（Error Handling）（Scenario Outline，4 個 Examples）
+### Red
+測試：`src/store/photoBackup.test.ts::無效的照片備份 > 無效的照片備份被整份拒絕（Error Handling）：<問題>`（`it.each`，每列一個 Example；後兩例的 zip 內含 p2，確保「沒擋下就會被寫入」）
+```
+   × 無效的照片備份被整份拒絕（Error Handling）：不是 zip 3ms
+     → invalid zip data
+   × 無效的照片備份被整份拒絕（Error Handling）：缺少 manifest.json 0ms
+     → Unexpected end of JSON input
+   × 無效的照片備份被整份拒絕（Error Handling）：manifest 的 app 不是 bloomin-photos 2ms
+     → expected true to be false // Object.is equality
+   × 無效的照片備份被整份拒絕（Error Handling）：manifest 的 schemaVersion 比 App 新 1ms
+     → expected true to be false // Object.is equality
+```
+失敗類型：功能未實作（前兩例例外直接拋出、沒有拒絕結果；後兩例被照單全收）
+### Green
+變更：`src/store/photoBackup.ts` — `parsePhotoBackup`：寫入前依序檢查 zip 可解、manifest 存在且為 JSON、`app`、`schemaVersion`（≤ 目前版本）、`photos` 為陣列；任一不符回傳 `{ ok: false, error }`
+```
+ Test Files  8 passed (8)
+      Tests  84 passed (84)
+```
+
+## Slice 20 — 缺少圖檔的項目被略過（Error Handling）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 缺少圖檔的項目被略過（Error Handling）`
+```
+   × 匯入照片備份 > 缺少圖檔的項目被略過（Error Handling） 4ms
+     → expected { id: 'p2', studentId: 's1', …(7) } to be undefined
+```
+失敗類型：斷言失敗（缺圖檔的 p2 仍被寫入，blob 是內容為 "undefined" 的殘缺 Blob）
+### Green
+變更：`src/store/photoBackup.ts` — 原圖或縮圖任一缺失即略過並計入 `missingFile`；`describeImport` 附「略過 N 張檔案缺失」
+```
+ Test Files  8 passed (8)
+      Tests  85 passed (85)
+```
+
+## Slice 21 — 匯入途中空間不足時保留已匯入的部分（Error Handling）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 匯入途中空間不足時保留已匯入的部分（Error Handling）`（spy `put`：第 1 次放行，之後拋 `QuotaExceededError`）
+```
+   × 匯入照片備份 > 匯入途中空間不足時保留已匯入的部分（Error Handling） 5ms
+     → The quota has been exceeded.
+```
+失敗類型：功能未實作（例外直接拋出，沒有部分結果回報）
+### Green
+變更：`src/store/photoBackup.ts` — `put` 遇 `QuotaExceededError` 即中止，`noSpace` = 尚未處理的項目數；`describeImport` 回報「裝置儲存空間不足，已匯入 N 張、M 張因空間不足未匯入…」
+```
+ Test Files  8 passed (8)
+      Tests  86 passed (86)
+```
+
+## Slice 22 — 刪除後可從備份找回（State）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 刪除後可從備份找回（State）`
+```
+   × 匯入照片備份 > 刪除後可從備份找回（State） 3ms
+     → (0 , deletePhoto) is not a function
+```
+失敗類型：符號不存在（刪除尚未實作）
+### Green
+變更：`src/store/photos.ts` — `deletePhoto`（實體刪除）。匯入端不需改動：id 已不存在就視為新增。
+```
+ Test Files  8 passed (8)
+      Tests  87 passed (87)
+```
+
+## Slice 23 — 匯出的備份可被匯入還原（Integration）
+### Red
+測試：`src/store/photoBackup.test.ts::匯入照片備份 > 匯出的備份可被匯入還原（Integration）`（真正的匯出 → 清空 → 匯入同一份檔案，逐欄比對含 blob/thumb 位元組）
+第一次執行即通過 → **既有行為，無 Green**：Slice 16 為了滿足 `thumbFile` 型別，匯出端已同時寫入縮圖。
+突變檢查（暫時讓匯出不寫縮圖，跑完即還原）：
+```
+   × 匯入照片備份 > 匯出的備份可被匯入還原（Integration） 15ms
+     → expected [] to deeply equal [ { studentId: 's1', …(8) }, …(1) ]
+```
+還原後全套：
+```
+ Test Files  8 passed (8)
+      Tests  88 passed (88)
+```

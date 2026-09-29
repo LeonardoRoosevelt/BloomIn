@@ -65,6 +65,22 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
   return { usage, quota }
 }
 
+/* ── 照片備份時間 ─────────────────────────────
+ * 刻意不進 AppState：放進去就得改 SCHEMA_VERSION 與既有 JSON 備份格式，
+ * 而照片備份本來就是獨立的檔案。只有真的送出備份才更新。
+ */
+const PHOTO_BACKUP_AT_KEY = 'photoBackupAt'
+
+export async function loadPhotoBackupAt(): Promise<string | null> {
+  const db = await getDb()
+  return ((await db.get(STORE, PHOTO_BACKUP_AT_KEY)) as string | undefined) ?? null
+}
+
+export async function savePhotoBackupAt(at: string): Promise<void> {
+  const db = await getDb()
+  await db.put(STORE, at, PHOTO_BACKUP_AT_KEY)
+}
+
 /* ── 可行性自檢專用記錄 ──────────────────────────────
  * 與領域資料分開存放，避免污染備份檔的 schema。
  */

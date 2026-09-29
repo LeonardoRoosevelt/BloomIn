@@ -78,6 +78,15 @@ export async function updatePhoto(
   await tx.done
 }
 
+/**
+ * 實體刪除：照片不牽涉帳務，不需要像學生那樣封存。
+ * 無法復原（除非有照片備份），因此畫面上一定要先二次確認。
+ */
+export async function deletePhoto(id: string): Promise<void> {
+  const db = await getDb()
+  await db.delete(PHOTOS_STORE, id)
+}
+
 export interface AddPhotosResult {
   added: number
   /** 無法解碼而略過的檔案數（非圖片、格式不支援） */
