@@ -1,0 +1,58 @@
+Project bloomin {
+  database_type: 'IndexedDB'
+  Note: '''
+  BloomIn 單機離線 PWA 的本機資料模型（IndexedDB 資料庫 "bloomin"，版本 2）。
+  領域資料（settings / courseTypes / students / sessions / attendances）以單一 JSON
+  存在 kv 的 "state" 鍵，型別的唯一來源是 src/domain/types.ts；本檔只列出
+  object store 結構與本功能引用到的領域欄位。
+  '''
+}
+
+Table kv {
+  key   varchar [primary key, note: '"state" | "selfcheck" | "rollback" | "photoBackupAt"']
+  value json    [not null]
+
+  Note: '''
+  IndexedDB object store "kv"（out-of-line key）。
+  "photoBackupAt" 存最後一次成功匯出照片備份的 ISO 時間，刻意不進 AppState，
+  以免改動 SCHEMA_VERSION 與既有 JSON 備份格式；只有真的送出才更新，
+  見 Scenario「取消分享時不算備份完成（Error Handling）」。
+  '''
+}
+
+Table students {
+  id       varchar [primary key]
+  archived boolean [not null, default: false]
+
+  Note: '''
+  邏輯實體，實際存於 kv["state"].students（完整欄位見 src/domain/types.ts Student）。
+  只能封存不能刪除；封存不影響照片紀錄本，
+  見 Scenario「已封存學生的紀錄本照常可用（Edge Case）」。
+  '''
+}
+
+Table photos {
+  id         varchar   [primary key, note: 'keyPath；匯入時以此判斷已存在並略過，見「已存在的照片在匯入時略過（Edge Case）」']
+  student_id varchar   [not null, note: 'IndexedDB 屬性名 studentId。邏輯參照 students.id，但不強制：允許暫時孤立，見「找不到所屬學生的照片仍會匯入（Edge Case）」']
+  record_date varchar  [not null, note: 'IndexedDB 屬性名 recordDate，YYYY-MM-DD；只驗證格式、不限範圍']
+  caption    varchar   [not null, default: '', note: '可為空字串，不用 null（與 types.ts 慣例一致）']
+  blob       blob      [not null, note: 'image/jpeg，長邊 ≤ 2000px，品質 0.85；小圖不放大']
+  thumb      blob      [not null, note: 'image/jpeg，長邊 ≤ 400px，品質 0.7；列表只讀它，見「照片依紀錄日期由新到舊並依月分組（Edge Case）」']
+  width      integer   [not null, note: 'blob 實際像素寬（已套用 EXIF 方向）']
+  height     integer   [not null, note: 'blob 實際像素高（已套用 EXIF 方向）']
+  created_at varchar   [not null, note: 'IndexedDB 屬性名 createdAt，ISO；同日照片的次要排序鍵']
+
+  indexes {
+    student_id [name: 'studentId']
+  }
+
+  Note: '''
+  IndexedDB object store "photos"（DB 版本 2 新增）。不進 AppState，
+  與 JSON 資料備份互不影響，見「還原資料備份不影響照片（Edge Case）」。
+  實體刪除（照片不牽涉帳務），刪除需二次確認，見「確認後刪除照片（State）」。
+  blob 與 thumb 在同一筆 put 中寫入，空間不足時整筆不寫入。
+  '''
+}
+
+// 邏輯關聯，不強制參照完整性（IndexedDB 無 FK）
+Ref: photos.student_id > students.id
