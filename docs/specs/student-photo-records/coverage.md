@@ -20,13 +20,13 @@
 ### 1. Happy Path
 - 情境：老師在某位學生的詳情頁 → 點「照片紀錄本」→ 新增照片（從相簿選或用相機拍）→ 填紀錄日期與說明 → 儲存
   - 預期行為：照片縮到長邊 ≤ 2000px 的 JPEG 後存入；紀錄本列表出現縮圖、日期、說明；關閉並重開 App 後仍在。
-  - 資料需求：`photo.id`（PK）、`photo.studentId`（not null，參照 `Student.id`，索引）、`photo.recordDate`（not null，YYYY-MM-DD）、`photo.caption`（not null，可為空字串）、`photo.blob`（not null，image/jpeg）、`photo.width` / `photo.height`（not null）、`photo.createdAt`（not null，ISO）。
+  - 資料需求：`photo.id`（PK）、`photo.studentId`（not null，參照 `Student.id`，索引）、`photo.recordDate`（not null，YYYY-MM-DD）、`photo.caption`（not null，可為空字串）、原圖（not null，image/jpeg，另存於 `photoBlobs` store，key 同 `photo.id`）、`photo.width` / `photo.height`（not null）、`photo.createdAt`（not null，ISO）。
 - 情境：一次選取多張照片（例如一整本紙本簽到簿翻拍）
   - 預期行為：每張各自成為一筆紀錄，預設共用同一個紀錄日期與空白說明；之後可逐張編輯。
   - 資料需求：同上，每張一筆 `photo`。
 - 情境：開啟某張照片
   - 預期行為：全螢幕檢視原尺寸（≤2000px），可雙指縮放看清手寫字跡；顯示日期與說明。
-  - 資料需求：讀取 `photo.blob`。
+  - 資料需求：從 `photoBlobs` 讀取該張原圖。
 - 情境：編輯既有照片的紀錄日期或說明
   - 預期行為：列表立即反映；照片本身不變。
   - 資料需求：更新 `photo.recordDate`、`photo.caption`。
@@ -43,7 +43,7 @@
   - 資料需求：以 `photo.studentId` 查詢結果為空。
 - 情境：紀錄本照片很多（例如 200 張）
   - 預期行為：列表用縮圖顯示、不一次解碼 200 張 2000px 原圖；依 `recordDate` 由新到舊排序，同日依 `createdAt`；依月份分組（與學生詳情頁出席明細同樣的月份分組呈現）。
-  - 資料需求：`photo.thumb`（not null，長邊約 400px JPEG Blob），避免列表載入原圖；`photo.studentId` 索引。
+  - 資料需求：`photo.thumb`（not null，長邊約 400px JPEG Blob）；原圖另存 `photoBlobs`，列表只讀 `photos`，連原圖的檔案參照都不會取回；`photo.studentId` 索引。
 - 情境：原圖本身長邊已 ≤ 2000px
   - 預期行為：不放大，維持原尺寸，仍轉成 JPEG。
   - 資料需求：`photo.width` / `photo.height` 記錄實際輸出尺寸。
@@ -75,7 +75,7 @@
   - 資料需求：無（解碼失敗不寫入）。
 - 情境：儲存空間不足（IndexedDB `QuotaExceededError`）
   - 預期行為：顯示「裝置儲存空間不足，這張照片沒有存進去」；已存的照片不受影響；該筆不寫入。
-  - 資料需求：單張寫入是單一交易（blob 與 thumb 同一筆 put），不會寫一半。
+  - 資料需求：單張寫入是單一交易（`photos` 的中繼資料＋縮圖與 `photoBlobs` 的原圖在同一個 readwrite 交易），空間不足時兩邊都不寫入，不會留下半張。
 - 情境：瀏覽器以不同形式回報空間不足 —— 寫入直接拋 `QuotaExceededError`，或交易被中止（該筆請求的錯誤是 `AbortError`，交易本身的 `error` 才是 `QuotaExceededError`）
   - 預期行為：新增照片與匯入照片備份都視為空間不足，照上面兩個情境回報並停止。但交易因其他原因中止（交易的 `error` 不是 `QuotaExceededError`）時不能誤報為空間不足，錯誤照常呈現。判斷依據是交易的 error，不是請求的 `AbortError`。
   - 資料需求：寫入時保留交易物件，失敗後等交易結束再讀 `transaction.error`。
@@ -122,12 +122,12 @@
 ### 5. State Transitions
 - 情境：照片生命週期 `不存在 → 已存 → 已刪除`
   - 預期行為：刪除需二次確認（確認對話框說明「刪除後無法復原，除非有照片備份」）；確認後從 store 移除，列表立即更新。取消則不變。
-  - 資料需求：刪除為實體刪除（照片不牽涉帳務，不需要封存）。
+  - 資料需求：刪除為實體刪除（照片不牽涉帳務，不需要封存）；`photos` 與 `photoBlobs` 在同一個交易刪除，不留孤立的原圖。
 - 情境：刪除後再匯入含該張的照片備份
   - 預期行為：該張重新出現（id 已不存在，視為新增）。
   - 資料需求：`photo.id`。
 - 情境：IndexedDB 由 v1 升級到 v2
-  - 預期行為：既有 `kv` store 與 `state` 資料完整保留，僅新增 `photos` store 與 `studentId` 索引。
+  - 預期行為：既有 `kv` store 與 `state` 資料完整保留，僅新增 `photos` store（含 `studentId` 索引）與 `photoBlobs` store。
   - 資料需求：`DB_VERSION` 1 → 2；`upgrade()` 依 `oldVersion` 增量建立。
 - 情境：升級時還有舊版 App 的分頁／視窗開著（舊版沒有處理 versionchange，連線不會自己關）
   - 預期行為：升級被擋住時不能無限等待而停在白畫面；顯示可理解的提示（「請關閉其他開著的 BloomIn 分頁」）。這不是讀取失敗，不能進入錯誤狀態、也不能讓人開始輸入；舊連線一關閉，升級自動完成、畫面自動進入 App，`kv` 的資料完整保留。
@@ -165,7 +165,8 @@
   - 照片紀錄本為獨立子頁面（路由 `student-photos`），學生詳情頁放入口與張數。
 
 ## 資料實體摘要
-- 新增：IndexedDB object store `photos`（keyPath `id`，index `studentId`），欄位 `id`, `studentId`, `recordDate`, `caption`, `blob`, `thumb`, `width`, `height`, `createdAt`。
+- 新增：IndexedDB object store `photos`（keyPath `id`，index `studentId`），欄位 `id`, `studentId`, `recordDate`, `caption`, `thumb`, `width`, `height`, `createdAt`。
+- 新增：IndexedDB object store `photoBlobs`（out-of-line key = `photos.id`），值為原圖 Blob。與 `photos` 同在 DB v2 建立；新增、刪除都與 `photos` 在同一個交易。
 - 新增：照片備份 zip 格式（`manifest.json` + `photos/<id>.jpg`），manifest 信封 `app: 'bloomin-photos'`, `schemaVersion`, `exportedAt`, `photos[]`。
 - 修改：`src/store/db.ts` `DB_VERSION` 1 → 2。
 - 不修改：`AppState`、`SCHEMA_VERSION`、現有 JSON 備份格式。

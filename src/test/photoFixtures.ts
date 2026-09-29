@@ -1,4 +1,4 @@
-import { getDb, PHOTOS_STORE } from '../store/db'
+import { getDb, PHOTO_BLOBS_STORE, PHOTOS_STORE } from '../store/db'
 import type { Photo } from '../store/photos'
 
 /*
@@ -20,7 +20,18 @@ export function photoRecord(fields: Partial<Photo> & { id: string }): Photo {
   }
 }
 
+/** 依 schema.dbml 的結構寫入：photos 只放中繼資料與縮圖，原圖放 photoBlobs（key 同 id）。 */
 export async function seedPhotos(...photos: Photo[]): Promise<void> {
   const db = await getDb()
-  for (const p of photos) await db.put(PHOTOS_STORE, p)
+  for (const { blob, ...record } of photos) {
+    await db.put(PHOTOS_STORE, record)
+    await db.put(PHOTO_BLOBS_STORE, blob, record.id)
+  }
+}
+
+/** 清空照片（兩個 store 一起），測試之間互不影響。 */
+export async function clearPhotoStores(): Promise<void> {
+  const db = await getDb()
+  await db.clear(PHOTOS_STORE)
+  await db.clear(PHOTO_BLOBS_STORE)
 }

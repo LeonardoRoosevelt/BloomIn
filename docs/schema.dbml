@@ -28,6 +28,8 @@ Table students {
   邏輯實體，實際存於 kv["state"].students（完整欄位見 src/domain/types.ts Student）。
   只能封存不能刪除；封存不影響照片紀錄本，
   見 Scenario「已封存學生的紀錄本照常可用（Edge Case）」。
+  日後若加入「刪除學生」，必須先決定該學生照片的處理方式（一併刪除、保留為未歸屬或禁止刪除），
+  否則照片會變成永久的孤兒。
   '''
 }
 
@@ -36,7 +38,6 @@ Table photos {
   student_id varchar   [not null, note: 'IndexedDB 屬性名 studentId。邏輯參照 students.id，但不強制：允許暫時孤立，見「找不到所屬學生的照片仍會匯入（Edge Case）」']
   record_date varchar  [not null, note: 'IndexedDB 屬性名 recordDate，YYYY-MM-DD；只驗證格式、不限範圍']
   caption    varchar   [not null, default: '', note: '可為空字串，不用 null（與 types.ts 慣例一致）']
-  blob       blob      [not null, note: 'image/jpeg，長邊 ≤ 2000px，品質 0.85；小圖不放大']
   thumb      blob      [not null, note: 'image/jpeg，長邊 ≤ 400px，品質 0.7；列表只讀它，見「照片依紀錄日期由新到舊並依月分組（Edge Case）」']
   width      integer   [not null, note: 'blob 實際像素寬（已套用 EXIF 方向）']
   height     integer   [not null, note: 'blob 實際像素高（已套用 EXIF 方向）']
@@ -47,12 +48,28 @@ Table photos {
   }
 
   Note: '''
-  IndexedDB object store "photos"（DB 版本 2 新增）。不進 AppState，
+  IndexedDB object store "photos"（DB 版本 2 新增）。只存中繼資料與縮圖；原圖另存 photoBlobs，
+  列表只讀這個 store，見「照片依紀錄日期由新到舊並依月分組（Edge Case）」。不進 AppState，
   與 JSON 資料備份互不影響，見「還原資料備份不影響照片（Edge Case）」。
   實體刪除（照片不牽涉帳務），刪除需二次確認，見「確認後刪除照片（State）」。
-  blob 與 thumb 在同一筆 put 中寫入，空間不足時整筆不寫入。
+  與 photoBlobs 在同一個 readwrite 交易中寫入／刪除，空間不足時兩邊都不寫入，
+  見「儲存空間不足時該張不寫入（Error Handling）」。
+  '''
+}
+
+Table photoBlobs {
+  photo_id varchar [primary key, note: 'out-of-line key，等於 photos.id']
+  blob     blob    [not null, note: 'image/jpeg，長邊 ≤ 2000px，品質 0.85；小圖不放大']
+
+  Note: '''
+  IndexedDB object store "photoBlobs"（DB 版本 2 新增，out-of-line key，值直接是原圖 Blob）。
+  與 photos 分開存放：列表只讀 photos，連原圖的檔案參照都不取回，
+  見「照片依紀錄日期由新到舊並依月分組（Edge Case）」；檢視原圖時才讀，
+  見「檢視照片原尺寸（Happy Path）」。與 photos 同一交易新增／刪除，
+  見「新增一張照片（Happy Path）」「確認後刪除照片（State）」。
   '''
 }
 
 // 邏輯關聯，不強制參照完整性（IndexedDB 無 FK）
 Ref: photos.student_id > students.id
+Ref: photoBlobs.photo_id - photos.id

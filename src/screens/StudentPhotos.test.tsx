@@ -2,10 +2,10 @@ import 'fake-indexeddb/auto'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInitialState, type Student } from '../domain/types'
-import { getDb, PHOTOS_STORE } from '../store/db'
+import { getDb, PHOTO_BLOBS_STORE } from '../store/db'
 import { useStore } from '../store/useStore'
 import { StudentPhotos } from './StudentPhotos'
-import { photoRecord, seedPhotos } from '../test/photoFixtures'
+import { clearPhotoStores, photoRecord, seedPhotos } from '../test/photoFixtures'
 import { fakeImageFile } from '../test/fakeCodec'
 import { getPhoto, listAllPhotos } from '../store/photos'
 
@@ -64,8 +64,7 @@ beforeEach(async () => {
   URL.revokeObjectURL = (url: string) => {
     revokedUrls.add(url)
   }
-  const db = await getDb()
-  await db.clear(PHOTOS_STORE)
+  await clearPhotoStores()
   // Given：students 中存在 s1
   useStore.setState({
     data: { ...createInitialState(), students: [student({ id: 's1', name: '王小明' })] },
@@ -190,6 +189,8 @@ describe('照片紀錄本畫面', () => {
     fireEvent.click(screen.getByRole('button', { name: '刪除照片' }))
 
     await waitFor(async () => expect(await getPhoto('p1')).toBeUndefined())
+    // photoBlobs 中也不存在 p1 的原圖
+    expect(await (await getDb()).get(PHOTO_BLOBS_STORE, 'p1')).toBeUndefined()
     // 列表立即更新
     expect(await screen.findByText('還沒有照片')).toBeTruthy()
   })

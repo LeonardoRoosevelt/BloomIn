@@ -1,18 +1,17 @@
 import 'fake-indexeddb/auto'
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDb, loadPhotoBackupAt, PHOTOS_STORE, savePhotoBackupAt } from './db'
+import { getDb, loadPhotoBackupAt, savePhotoBackupAt } from './db'
 import { describeExport, describeImport, exportPhotoBackup, importPhotoBackup } from './photoBackup'
 import { deletePhoto, getPhoto, listAllPhotos } from './photos'
-import { photoRecord, seedPhotos } from '../test/photoFixtures'
+import { clearPhotoStores, photoRecord, seedPhotos } from '../test/photoFixtures'
 import { simulateTransactionAbort } from '../test/storageFull'
 
 const NOW = new Date('2026-09-29T14:05:00+08:00')
 
 beforeEach(async () => {
-  const db = await getDb()
-  await db.clear(PHOTOS_STORE)
-  await db.delete('kv', 'photoBackupAt')
+  await clearPhotoStores()
+  await (await getDb()).delete('kv', 'photoBackupAt')
 })
 
 afterEach(() => {
@@ -204,11 +203,11 @@ describe('匯入照片備份', () => {
 
   it('匯入途中空間不足時保留已匯入的部分（Error Handling）', async () => {
     const zip = await backupZip([photoRecord({ id: 'p1' }), photoRecord({ id: 'p2' }), photoRecord({ id: 'p3' })])
-    // 裝置空間只夠再存 1 張：第一次寫入成功，之後瀏覽器丟 QuotaExceededError
+    // 裝置空間只夠再存 1 張：一張照片是 photos＋photoBlobs 兩次寫入，放行這兩次，之後瀏覽器丟 QuotaExceededError
     const realPut = IDBObjectStore.prototype.put
     let writes = 0
     vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args) {
-      if (writes++ < 1) return realPut.apply(this, args)
+      if (writes++ < 2) return realPut.apply(this, args)
       throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
     })
 
@@ -243,8 +242,7 @@ describe('匯入照片備份', () => {
     const { shared } = stubShareSheet()
 
     await exportPhotoBackup(NOW)
-    const db = await getDb()
-    await db.clear(PHOTOS_STORE)
+    await clearPhotoStores()
     expect(await listAllPhotos()).toEqual([])
     await importPhotoBackup(shared[0]!, new Set(['s1', 's2']))
 

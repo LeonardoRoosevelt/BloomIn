@@ -14,6 +14,7 @@ Feature: 學生照片紀錄本
       And 該記錄的 recordDate 為 "2024-03-15"、caption 為 "上學期簽到卡 第 1 頁"
       And 該記錄的 blob 為 image/jpeg，width 為 2000、height 為 1500
       And 該記錄同時帶有長邊為 400 的 thumb
+      And photos 中的記錄只含中繼資料與 thumb，原圖存於 photoBlobs（key 同該記錄的 id）
 
     # coverage: Happy Path / 一次選取多張照片
     @happy-path
@@ -59,7 +60,7 @@ Feature: 學生照片紀錄本
       When 老師開啟學生 "s1" 的照片紀錄本
       Then 分組依序為 "2024-05"、"2024-03"
       And "2024-03" 組內依序為 p3、p1
-      And 列表只讀取 thumb，不讀取 blob
+      And 列表只讀取 photos 的 thumb，不讀取 photoBlobs 的原圖
 
     # coverage: Edge Cases / 原圖長邊已 ≤ 2000px
     @edge-case
@@ -130,6 +131,7 @@ Feature: 學生照片紀錄本
       When 老師替學生 "s1" 新增一張照片
       Then 回報「裝置儲存空間不足」
       And photos 中仍只有 "p1"
+      And photoBlobs 中也只有 "p1" 的原圖
 
     # coverage: Error Handling / 空間不足以交易中止的形式回報
     @error
@@ -304,6 +306,7 @@ Feature: 學生照片紀錄本
       Given photos 中存在 id 為 "p1" 的記錄
       When 老師要求刪除 "p1" 並在確認時同意
       Then photos 中不存在 "p1"
+      And photoBlobs 中也不存在 "p1" 的原圖
 
     # coverage: State Transitions / 取消刪除
     @state
@@ -327,6 +330,7 @@ Feature: 學生照片紀錄本
     When App 以版本 2 開啟資料庫
     Then kv 中的 state 完整保留
     And photos 已建立且可依 studentId 查詢
+    And photoBlobs 已建立，可依照片 id 存取原圖
 
   # coverage: State Transitions / 升級時舊版分頁仍開著
   @state

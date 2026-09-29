@@ -1,13 +1,14 @@
 import { preparePhoto, type ImageCodec } from '../domain/photoImage'
 import { monthKey } from '../lib/date'
 import { newId } from '../lib/id'
-import { getDb, PHOTOS_STORE } from './db'
+import { getDb, PHOTO_BLOBS_STORE, PHOTOS_STORE } from './db'
 
 /**
- * 學生照片紀錄本的一張照片。
+ * 學生照片紀錄本的一張照片（含原圖）。
  *
  * 與 domain/types 同樣不使用選填欄位：caption 空白就是空字串。
  * 刻意不進 AppState —— 照片是大型 Blob，放進 state 每次存檔都要重寫整包。
+ * 存放時拆成兩處：photos 存 PhotoSummary（中繼資料＋縮圖），photoBlobs 存原圖（key 同 id）。
  */
 export interface Photo {
   id: string
@@ -25,9 +26,27 @@ export interface Photo {
   createdAt: string
 }
 
+/** 全部照片（含原圖）。 */
 export async function listAllPhotos(): Promise<Photo[]> {
   const db = await getDb()
-  return db.getAll(PHOTOS_STORE) as Promise<Photo[]>
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readonly')
+  const records = (await tx.objectStore(PHOTOS_STORE).getAll()) as PhotoSummary[]
+  const photos = await withBlobs(tx.objectStore(PHOTO_BLOBS_STORE), records)
+  await tx.done
+  return photos
+}
+
+/** 替中繼資料補上原圖；原圖缺失的（理論上不會發生，兩邊同一交易寫入）不列入。 */
+async function withBlobs(
+  blobStore: { get(key: string): Promise<unknown> },
+  records: readonly PhotoSummary[],
+): Promise<Photo[]> {
+  const photos: Photo[] = []
+  for (const record of records) {
+    const blob = (await blobStore.get(record.id)) as Blob | undefined
+    if (blob) photos.push({ ...record, blob })
+  }
+  return photos
 }
 
 /** 學生詳情頁入口顯示的張數；用索引計數，不必把照片讀出來。 */
@@ -36,7 +55,7 @@ export async function countPhotos(studentId: string): Promise<number> {
   return db.countFromIndex(PHOTOS_STORE, 'studentId', studentId)
 }
 
-/** 列表用的照片：刻意不帶原圖，畫面只能拿縮圖來顯示。 */
+/** photos store 裡的記錄，也是列表用的照片：不帶原圖，畫面只能拿縮圖來顯示。 */
 export type PhotoSummary = Omit<Photo, 'blob'>
 
 /**
@@ -49,13 +68,12 @@ export async function listPhotosByMonth(
   studentId: string,
 ): Promise<{ month: string; photos: PhotoSummary[] }[]> {
   const db = await getDb()
-  const all = (await db.getAllFromIndex(PHOTOS_STORE, 'studentId', studentId)) as Photo[]
-  const sorted = all
-    .map(({ blob: _blob, ...summary }): PhotoSummary => summary)
-    .sort((a, b) => {
-      const byDate = b.recordDate.localeCompare(a.recordDate)
-      return byDate !== 0 ? byDate : b.createdAt.localeCompare(a.createdAt)
-    })
+  // 只讀 photos：原圖在 photoBlobs，列表連它的檔案參照都不取回
+  const all = (await db.getAllFromIndex(PHOTOS_STORE, 'studentId', studentId)) as PhotoSummary[]
+  const sorted = all.sort((a, b) => {
+    const byDate = b.recordDate.localeCompare(a.recordDate)
+    return byDate !== 0 ? byDate : b.createdAt.localeCompare(a.createdAt)
+  })
   const groups: { month: string; photos: PhotoSummary[] }[] = []
   for (const p of sorted) {
     const month = monthKey(p.recordDate)
@@ -68,7 +86,11 @@ export async function listPhotosByMonth(
 
 export async function getPhoto(id: string): Promise<Photo | undefined> {
   const db = await getDb()
-  return db.get(PHOTOS_STORE, id) as Promise<Photo | undefined>
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readonly')
+  const record = (await tx.objectStore(PHOTOS_STORE).get(id)) as PhotoSummary | undefined
+  const [photo] = record ? await withBlobs(tx.objectStore(PHOTO_BLOBS_STORE), [record]) : []
+  await tx.done
+  return photo
 }
 
 /** 只改日期與說明；照片本身（blob / thumb）永遠不動。 */
@@ -87,10 +109,12 @@ export async function updatePhoto(
 /**
  * 實體刪除：照片不牽涉帳務，不需要像學生那樣封存。
  * 無法復原（除非有照片備份），因此畫面上一定要先二次確認。
+ * 中繼資料與原圖同一個交易刪除，不留孤立的原圖佔空間。
  */
 export async function deletePhoto(id: string): Promise<void> {
   const db = await getDb()
-  await db.delete(PHOTOS_STORE, id)
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readwrite')
+  await Promise.all([tx.objectStore(PHOTOS_STORE).delete(id), tx.objectStore(PHOTO_BLOBS_STORE).delete(id), tx.done])
 }
 
 /**
@@ -100,10 +124,18 @@ export async function deletePhoto(id: string): Promise<void> {
  */
 export async function putPhoto(photo: Photo): Promise<void> {
   const db = await getDb()
-  const tx = db.transaction(PHOTOS_STORE, 'readwrite')
+  // 中繼資料與原圖在同一個交易：空間不足時兩邊都不寫入，不會留下半張
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readwrite')
+  const { blob, ...record } = photo
+  const requests: Promise<unknown>[] = []
   try {
-    await Promise.all([tx.store.put(photo), tx.done])
+    requests.push(tx.objectStore(PHOTOS_STORE).put(record))
+    requests.push(tx.objectStore(PHOTO_BLOBS_STORE).put(blob, photo.id))
+    await Promise.all([...requests, tx.done])
   } catch (err) {
+    // 交易中止後，已送出的每個請求也都會 reject；若第二個請求同步拋錯，前一個請求的
+    // promise 根本沒進到 Promise.all，會變成沒人處理的錯誤。錯誤由下方統一處理，這裡全部接住
+    for (const request of requests) request.catch(() => undefined)
     await tx.done.catch(() => undefined)
     if (isQuotaError(tx.error)) throw tx.error
     throw err
@@ -148,7 +180,6 @@ export async function addPhotoFiles(
       createdAt: new Date().toISOString(),
     }
     try {
-      // blob 與 thumb 在同一筆 put：空間不足時整筆不寫入，不會留下半張
       await putPhoto(photo)
     } catch (err) {
       if (!isQuotaError(err)) throw err

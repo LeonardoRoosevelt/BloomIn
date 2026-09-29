@@ -873,3 +873,64 @@ $ ec_gate.py gherkin / coverage / tdd student-photo-records → 全部 PASS
 $ pnpm test → Test Files 16 passed (16) / Tests 132 passed (132)
 $ pnpm build → 成功
 ```
+
+---
+
+# 設計審查修正（依 design-review.md「使用者決定」）
+
+## 單元 1 — 原圖另存 `photoBlobs` store
+規格：
+- `coverage.md`：Happy Path 新增照片、檢視原圖、照片很多時的資料需求，Error Handling 空間不足（同一交易），State 刪除與 v1→v2 升級，資料實體摘要。
+- `.feature`：「新增一張照片（Happy Path）」加一行 Then（photos 只含中繼資料與 thumb，原圖存於 photoBlobs）；「照片依紀錄日期…（Edge Case）」改為「列表只讀取 photos 的 thumb，不讀取 photoBlobs 的原圖」；「儲存空間不足時該張不寫入」加「photoBlobs 中也只有 p1 的原圖」；「確認後刪除照片（State）」加「photoBlobs 中也不存在 p1 的原圖」；「資料庫升級保留既有資料（State）」加「photoBlobs 已建立」。
+- `docs/schema.dbml`：photos 移除 blob、新增 `photoBlobs` 表（Note 指回 Scenario）與 `Ref: photoBlobs.photo_id - photos.id`；students Note 註明「日後若加入刪除學生，必須先決定照片的處理方式」。
+- coverage／gherkin／dbml 門禁 PASS。
+
+### Slice 1-1 schema
+#### Red
+`src/store/db.test.ts::資料庫升級保留既有資料（State）` 加入 photoBlobs 存在、out-of-line key、可存取 Blob 的斷言。
+```
+   × IndexedDB 結構 > 資料庫升級保留既有資料（State） 8ms
+     → expected false to be true // Object.is equality
+```
+#### Green
+`src/store/db.ts` 在 v2 的 `oldVersion < 2` 分支建立 `photoBlobs`（v2 尚未部署，不開 v3），匯出 `PHOTO_BLOBS_STORE`。全套 `Tests 132 passed (132)`。
+
+### Slice 1-2 讀寫分開存放
+#### Red
+- 測試資料（fixture）改依新 schema 寫入：`seedPhotos` 把原圖寫到 photoBlobs；新增 `clearPhotoStores` 清兩個 store。這是 Given 的格式，不是 production code。
+- 新增斷言：
+  - 新增照片後直接讀兩個 store：photos 的記錄沒有 `blob`，photoBlobs 有原圖（2000x1500／0.85）
+  - 空間不足後 photoBlobs 的 key 只有 p1
+  - 刪除後 photoBlobs 沒有 p1
+  - 列表只開 photos 的交易（spy `IDBDatabase.prototype.transaction`）
+- 過程中我自己在 photoBackup.test 的 beforeEach 誤刪了 `db` 變數（`db is not defined`）。這屬測試自身錯誤，修正後才計入 Red。
+```
+   × 新增照片 > 新增一張照片（Happy Path） → expected { …(9) } to not have property "blob"
+   × 無法處理的輸入 > 儲存空間不足時該張不寫入（Error Handling） → expected [] to deeply equal [ Array(1) ]
+   × 匯出照片備份 > 匯出照片備份（Happy Path） → Cannot read properties of undefined (reading 'arrayBuffer')
+   × 匯出照片備份 > 照片備份透過分享面板送出（Integration） → 同上
+   × 匯出照片備份 > 取消分享時不算備份完成（Error Handling） → 同上
+   × 匯入照片備份 > 匯出的備份可被匯入還原（Integration） → Cannot read properties of undefined (reading 'type')
+   × 照片紀錄本畫面 > 檢視照片原尺寸（Happy Path） → Unable to find role="img"
+   × 照片紀錄本畫面 > 確認後刪除照片（State） → expected Blob { size: 7, type: 'image/jpeg' } to be undefined
+      Tests  8 failed | 124 passed (132)
+```
+失敗類型：功能未實作（原圖仍與中繼資料存在同一筆記錄；讀取端到 photos 找不到原圖）
+#### Green
+`src/store/photos.ts`：
+- `putPhoto`：拆成 `photos.put(中繼資料＋縮圖)`＋`photoBlobs.put(原圖, id)`，放在同一個 readwrite 交易，空間不足判斷沿用。
+- `deletePhoto`：同一交易刪兩邊。
+- `getPhoto`／`listAllPhotos`：同一個唯讀交易補上原圖。
+- `listPhotosByMonth`：只讀 photos。
+
+第一次跑剩一個失敗：「匯入途中空間不足時保留已匯入的部分」以「放行 1 次 put」代表「只夠再存 1 張」，現在一張照片是兩次 put。把放行次數改為 2（仍是剛好一張），斷言不變。
+```
+ Test Files  16 passed (16)
+      Tests  132 passed (132)
+```
+突變檢查（讓列表經由 `listAllPhotos` 讀取，跑完即還原）：
+```
+   × 紀錄本列表 > 照片依紀錄日期由新到舊並依月分組（Edge Case）
+     → expected [ 'photos', 'photoBlobs' ] to not include 'photoBlobs'
+```
+build 成功。

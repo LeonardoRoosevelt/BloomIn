@@ -16,6 +16,11 @@ const STATE_KEY = 'state'
  * 放進 state 會讓每次存檔都重寫整包，也會讓 JSON 備份暴增。
  */
 export const PHOTOS_STORE = 'photos'
+/**
+ * 原圖另存（key 同照片 id）：列表只讀 photos 的中繼資料與縮圖，連原圖的檔案參照都不取回。
+ * v2 尚未部署，因此直接放在 v2 的升級分支，不另開 v3。
+ */
+export const PHOTO_BLOBS_STORE = 'photoBlobs'
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
@@ -56,6 +61,7 @@ export function getDb(): Promise<IDBPDatabase> {
       if (oldVersion < 2) {
         const photos = db.createObjectStore(PHOTOS_STORE, { keyPath: 'id' })
         photos.createIndex('studentId', 'studentId')
+        db.createObjectStore(PHOTO_BLOBS_STORE)
       }
     },
     blocked() {

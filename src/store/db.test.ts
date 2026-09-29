@@ -33,6 +33,14 @@ describe('IndexedDB 結構', () => {
     await tx.done
     const ofS1 = await db.getAllFromIndex('photos', 'studentId', 's1')
     expect(ofS1.map((p: { id: string }) => p.id)).toEqual(['p1'])
+
+    // And photoBlobs 已建立，可依照片 id 存取原圖（out-of-line key：值直接是 Blob）
+    expect(db.objectStoreNames.contains('photoBlobs')).toBe(true)
+    const blobTx = db.transaction('photoBlobs', 'readwrite')
+    expect(blobTx.store.keyPath).toBeNull()
+    await blobTx.store.put(new Blob(['BLOB-p1'], { type: 'image/jpeg' }), 'p1')
+    await blobTx.done
+    expect(await ((await db.get('photoBlobs', 'p1')) as Blob).text()).toBe('BLOB-p1')
   })
 
   it('本分頁不會擋住較新版本的升級（State）', async () => {

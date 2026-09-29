@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDb, loadPhotoBackupAt, PHOTOS_STORE } from './db'
+import { loadPhotoBackupAt } from './db'
 import { exportPhotoBackup, importPhotoBackup } from './photoBackup'
 import {
   addPhotoFiles,
@@ -11,6 +11,7 @@ import {
   updatePhoto,
 } from './photos'
 import { fakeCodec, fakeImageFile } from '../test/fakeCodec'
+import { clearPhotoStores } from '../test/photoFixtures'
 
 /*
  * 「照片只存在本機」的證明方式：把瀏覽器所有送資料出去的管道換成
@@ -43,8 +44,7 @@ beforeEach(async () => {
       shared.push(...files)
     },
   })
-  const db = await getDb()
-  await db.clear(PHOTOS_STORE)
+  await clearPhotoStores()
 })
 
 afterEach(() => {
@@ -90,8 +90,7 @@ describe('本機與離線', () => {
     expect(await exportPhotoBackup(new Date('2026-09-29T10:00:00Z'))).toBe('shared')
     expect(await loadPhotoBackupAt()).toBe('2026-09-29T10:00:00.000Z')
     // 清空後匯入同一份
-    const db = await getDb()
-    await db.clear(PHOTOS_STORE)
+    await clearPhotoStores()
     const result = await importPhotoBackup(shared[0]!, new Set(['s1']))
 
     expect(result).toMatchObject({ ok: true, added: 1 })

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDb, PHOTOS_STORE } from './db'
+import { getDb, PHOTO_BLOBS_STORE, PHOTOS_STORE } from './db'
 import {
   addPhotoFiles,
   describeAddResult,
@@ -10,14 +10,13 @@ import {
   updatePhoto,
 } from './photos'
 import { encodedOf, fakeCodec, fakeImageFile, unreadableFile } from '../test/fakeCodec'
-import { photoRecord, seedPhotos } from '../test/photoFixtures'
+import { clearPhotoStores, photoRecord, seedPhotos } from '../test/photoFixtures'
 import { simulateTransactionAbort } from '../test/storageFull'
 import { createInitialState } from '../domain/types'
 import { useStore } from './useStore'
 
 beforeEach(async () => {
-  const db = await getDb()
-  await db.clear(PHOTOS_STORE)
+  await clearPhotoStores()
 })
 
 afterEach(() => {
@@ -59,6 +58,15 @@ describe('新增照片', () => {
     expect(p.thumb.type).toBe('image/jpeg')
     const thumb = await encodedOf(p.thumb)
     expect(Math.max(thumb.width, thumb.height)).toBe(400)
+
+    // photos 中的記錄只含中繼資料與 thumb，原圖存於 photoBlobs（key 同該記錄的 id）
+    const db = await getDb()
+    const stored = (await db.get(PHOTOS_STORE, p.id)) as Record<string, unknown>
+    expect(stored).not.toHaveProperty('blob')
+    expect(await encodedOf(stored.thumb as Blob)).toEqual(thumb)
+    const original = (await db.get(PHOTO_BLOBS_STORE, p.id)) as Blob
+    expect(original.type).toBe('image/jpeg')
+    expect(await encodedOf(original)).toEqual({ width: 2000, height: 1500, quality: 0.85 })
   })
 
   it('一次新增多張照片（Happy Path）', async () => {
@@ -149,6 +157,8 @@ describe('無法處理的輸入', () => {
     expect(describeAddResult(result)).toContain('裝置儲存空間不足')
     vi.restoreAllMocks()
     expect((await listAllPhotos()).map((p) => p.id)).toEqual([before[0]!.id])
+    // photoBlobs 中也只有 p1 的原圖，沒有留下半張
+    expect(await (await getDb()).getAllKeys(PHOTO_BLOBS_STORE)).toEqual([before[0]!.id])
   })
 
   it('空間不足以交易中止回報時同樣視為空間不足（Error Handling）：新增照片', async () => {
@@ -166,6 +176,7 @@ describe('無法處理的輸入', () => {
     expect(describeAddResult(result)).toContain('裝置儲存空間不足')
     vi.restoreAllMocks()
     expect((await listAllPhotos()).map((p) => p.id)).toEqual(['p1'])
+    expect(await (await getDb()).getAllKeys(PHOTO_BLOBS_STORE)).toEqual(['p1'])
   })
 
   it('非空間不足的交易中止不會被誤報為空間不足（Error Handling）', async () => {
@@ -208,11 +219,25 @@ describe('紀錄本列表', () => {
       photoRecord({ id: 'x1', studentId: 's2', recordDate: '2024-04-01' }),
     )
 
+    // 記下列表開了哪些 store 的交易
+    const realTransaction = IDBDatabase.prototype.transaction
+    const opened: string[] = []
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(function (
+      this: IDBDatabase,
+      ...args: Parameters<IDBDatabase['transaction']>
+    ) {
+      opened.push(...(typeof args[0] === 'string' ? [args[0]] : Array.from(args[0])))
+      return realTransaction.apply(this, args)
+    })
+
     const groups = await listPhotosByMonth('s1')
+    vi.restoreAllMocks()
 
     expect(groups.map((g) => g.month)).toEqual(['2024-05', '2024-03'])
     expect(groups[1]!.photos.map((p) => p.id)).toEqual(['p3', 'p1'])
-    // 列表只帶縮圖，不把原圖交給畫面
+    // 列表只讀取 photos 的 thumb，不讀取 photoBlobs 的原圖
+    expect(opened).toContain(PHOTOS_STORE)
+    expect(opened).not.toContain(PHOTO_BLOBS_STORE)
     for (const g of groups) {
       for (const p of g.photos) {
         expect(p).not.toHaveProperty('blob')
