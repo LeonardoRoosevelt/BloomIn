@@ -479,3 +479,23 @@ Error: Failed to resolve import "./StudentPhotos" from "src/screens/StudentPhoto
  Test Files  9 passed (9)
       Tests  96 passed (96)
 ```
+
+## Slice 32 — 照片只存在本機且不需登入（Permission）
+## Slice 33 — 離線時照片功能完整可用（Integration）
+### Red
+測試：`src/store/photosOffline.test.ts::本機與離線 > 照片只存在本機且不需登入（Permission）`、`… > 離線時照片功能完整可用（Integration）`
+做法：`fetch`、`XMLHttpRequest`（open/send）、`navigator.sendBeacon` 全換成「記下呼叫並拋 `TypeError('Network request failed…')`」，等同沒有網路；分享面板以本機 stub 取代。Permission 跑「無任何登入設定 → 新增 → 匯出」；Integration 跑「新增 2 張 → 列表 → 檢視原圖 → 編輯 → 刪除 → 匯出（記錄 photoBackupAt）→ 清空 → 匯入」。兩者都斷言流程成功且 `networkCalls` 為空陣列。
+第一次執行即通過 → **既有行為，無 Green**：照片功能全程只用 IndexedDB 與本機分享面板。
+突變檢查（暫時讓匯出多 `fetch` 上傳、匯入多 `sendBeacon`，跑完即還原）：
+```
+   × 本機與離線 > 照片只存在本機且不需登入（Permission） 9ms
+     → Network request failed: device is offline
+   × 本機與離線 > 離線時照片功能完整可用（Integration） 11ms
+     → Network request failed: device is offline
+```
+還原後全套：
+```
+ Test Files  10 passed (10)
+      Tests  98 passed (98)
+```
+限制：Service Worker 離線快取（App 殼層能否離線開啟）不在此測試範圍，沿用既有 PWA 設定；真實 codec 在此以假 codec 取代。
