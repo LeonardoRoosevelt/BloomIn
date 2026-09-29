@@ -621,3 +621,12 @@ $ pnpm test
  Test Files  11 passed (11)
       Tests  118 passed (118)
 ```
+
+## 順手修正 — 瀏覽器 codec（無單元測試，僅 tsc／build 把關，列入實機驗證）
+變更：`src/lib/imageCodec.ts`
+- `orientedBitmap` 逐級退回：帶 resize＋方向選項（失敗或尺寸不符）→ 只帶 `imageOrientation: 'from-image'` → 不帶任何選項。原本第一次呼叫沒包 try，不支援 resize 選項的瀏覽器會讓整張照片被當成「無法讀取」。
+- 畫到 canvas 前先鋪白底，避免透明 PNG 的透明處編成 JPEG 後變黑。
+```
+ Test Files  11 passed (11)
+      Tests  118 passed (118)
+```

@@ -35,6 +35,10 @@ export const browserCodec: ImageCodec = {
       canvas.height = height
       const ctx = canvas.getContext('2d')
       if (!ctx) throw new Error('無法建立畫布')
+      // JPEG 沒有透明度：不先鋪底，透明 PNG 的透明處會變成黑色。
+      // 白色是紙本的底色，這是像素資料不是 UI 樣式，所以不走 design tokens
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, width, height)
       ctx.drawImage(bitmap, 0, 0, width, height)
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
       // iOS 的 canvas 記憶體要等 GC 才回收，先縮成 0 立即釋放，連續處理多張時才不會累積
@@ -51,17 +55,27 @@ export const browserCodec: ImageCodec = {
 /**
  * 直接解碼成目標尺寸，避開完整解碼的記憶體開銷。
  *
- * 不是每個瀏覽器都支援 resizeWidth/resizeHeight，也有實作先縮放再套方向（直式照片會被壓扁）。
- * 所以核對輸出尺寸，對不上就退回完整解碼，交給 drawImage 縮放。
+ * 不是每個瀏覽器都支援 resizeWidth/resizeHeight（不支援時可能直接拋錯），
+ * 也有實作先縮放再套方向（直式照片會被壓扁）。所以逐級退回：
+ * 帶縮放選項 → 只帶方向選項 → 不帶任何選項，後兩者交給 drawImage 縮放。
  */
 async function orientedBitmap(source: ImageBitmapSource, width: number, height: number): Promise<ImageBitmap> {
-  const resized = await createImageBitmap(source, {
-    imageOrientation: 'from-image',
-    resizeWidth: width,
-    resizeHeight: height,
-    resizeQuality: 'high',
-  })
-  if (resized.width === width && resized.height === height) return resized
-  resized.close()
-  return createImageBitmap(source, { imageOrientation: 'from-image' })
+  try {
+    const resized = await createImageBitmap(source, {
+      imageOrientation: 'from-image',
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'high',
+    })
+    if (resized.width === width && resized.height === height) return resized
+    resized.close()
+  } catch {
+    // 不支援縮放選項：往下退回
+  }
+  try {
+    return await createImageBitmap(source, { imageOrientation: 'from-image' })
+  } catch {
+    // 連方向選項都不支援的舊實作；現行規格預設即會套用 EXIF 方向
+    return createImageBitmap(source)
+  }
 }
