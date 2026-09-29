@@ -242,8 +242,16 @@ function schedulePersist(state: AppState): void {
   timer = setTimeout(() => void flushPersist(), 300)
 }
 
+/**
+ * 進行中的存檔寫入。同一時間只允許一個：若失敗的舊寫入與新的寫入並行，
+ * 舊快照可能在新的已存好之後才被重試寫入，把裝置上的資料倒退回去。
+ */
+let inFlight: Promise<void> | null = null
+
 export async function flushPersist(): Promise<void> {
   clearTimeout(timer)
+  // 等前一個寫入結束（成功或失敗）再決定要寫什麼 —— 那時的 pending 才是真正最新的
+  while (inFlight) await inFlight
   // 已讓出連線：寫入必然失敗，只會變成未處理的錯誤；讓出前的最後變更已由 db.ts 盡力寫入（成功與否無從得知，所以提示畫面不做保證）
   if (useStore.getState().superseded) {
     pending = null
@@ -252,15 +260,22 @@ export async function flushPersist(): Promise<void> {
   if (!pending) return
   const state = pending
   pending = null
+  inFlight = (async () => {
+    try {
+      await saveState(state)
+      if (useStore.getState().persistError !== null) useStore.setState({ persistError: null })
+    } catch (err) {
+      // 沒存進去的變更不能丟：放回 pending 等下次存檔重試。
+      // 寫入期間若又有新變更，保留新的 —— 每次存的都是完整快照，新的已包含這次的內容
+      pending ??= state
+      // 不往外拋：呼叫端多是計時器或頁面事件，拋出只會變成沒人處理的錯誤；改由畫面常駐警告
+      useStore.setState({ persistError: err instanceof Error ? err.message : String(err) })
+    }
+  })()
   try {
-    await saveState(state)
-    if (useStore.getState().persistError !== null) useStore.setState({ persistError: null })
-  } catch (err) {
-    // 沒存進去的變更不能丟：放回 pending 等下次存檔重試。
-    // 寫入期間若又有新變更，保留新的 —— 每次存的都是完整快照，新的已包含這次的內容
-    pending ??= state
-    // 不往外拋：呼叫端多是計時器或頁面事件，拋出只會變成沒人處理的錯誤；改由畫面常駐警告
-    useStore.setState({ persistError: err instanceof Error ? err.message : String(err) })
+    await inFlight
+  } finally {
+    inFlight = null
   }
 }
 

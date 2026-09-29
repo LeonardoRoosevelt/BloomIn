@@ -165,6 +165,15 @@ Feature: 學生照片紀錄本
       When 寫入恢復正常後 App 再次存檔
       Then 剛才的修改寫進裝置，警告消失
 
+    # coverage: Error Handling / 存檔失敗與新的存檔交錯
+    @error
+    Scenario: 存檔失敗不會讓較舊的資料覆蓋較新的資料（Error Handling）
+      Given App 正在存檔修改 S1，這次寫入稍後會失敗
+      And 老師接著改成 S2，App 再次存檔
+      When S1 的寫入失敗後，App 又存檔一次
+      Then 裝置上的資料是 S2，不會被 S1 覆蓋
+      And S1 失敗的警告直到 S2 真正存入才消失
+
     # coverage: Error Handling / 編輯或刪除時寫入失敗
     @error
     Scenario: 編輯或刪除失敗時顯示錯誤（Error Handling）

@@ -812,3 +812,25 @@ $ ec_gate.py tdd student-photo-records      → PASS
 $ pnpm test → Test Files 14 passed (14) / Tests 129 passed (129)
 $ pnpm build → 成功
 ```
+
+---
+
+# 修正輪 4（修正輪 3 第 4 項帶出的兩個 bug）
+
+## Fix B-c1 — 存檔失敗與新存檔交錯時，舊快照覆蓋新資料
+規格：`coverage.md` Error Handling 新增「存檔失敗與新的存檔交錯」條目（同屬 App 全域存檔機制）；`.feature` 新增 Scenario「存檔失敗不會讓較舊的資料覆蓋較新的資料（Error Handling）」。gherkin／coverage 門禁 PASS。
+### Red
+測試：新檔 `src/store/useStore.persist.test.ts`（照 verifier 的方法，以 `vi.doMock('./db')` 替換 `saveState`：第一次延遲 100ms 後失敗，之後成功並記錄「裝置上」的資料）。流程：改 S1 → `flushPersist()` 不 await → 改 S2 → 再 flush → 等兩者結束 → 再 flush 一次（模擬切到背景）。
+```
+   × 存檔串行化 > 存檔失敗不會讓較舊的資料覆蓋較新的資料（Error Handling） 105ms
+     → expected 'S1' to be 'S2' // Object.is equality
+```
+失敗類型：功能未實作。S2 先寫入成功；S1 之後失敗，`pending` 被放回 S1；下一次 flush 就把 S1 寫進去，裝置倒退成舊資料，警告也被清掉。
+### Green
+變更：`src/store/useStore.ts` — `flushPersist` 串行化。新增 `inFlight`，進入時 `while (inFlight) await inFlight`，等前一個寫入結束才取當下的 `pending`。
+設計理由：串行化後，S1 失敗時 `pending` 已是 S2，原本的 `pending ??= state` 就會保留 S2，不需要另外做版本比對；寫入失敗時警告一直留著，直到下一次寫入（最新狀態）成功才清除。讓出連線時 `unsavedState()` 取到的 `pending` 也一定是最新的。寫入本身的順序由一個 promise 保證，不另加佇列。
+```
+ Test Files  15 passed (15)
+      Tests  130 passed (130)
+```
+build 成功。
