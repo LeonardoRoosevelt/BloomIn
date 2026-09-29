@@ -630,3 +630,17 @@ $ pnpm test
  Test Files  11 passed (11)
       Tests  118 passed (118)
 ```
+
+## 清理
+- 移除未使用的 devDep `@testing-library/user-event`（`pnpm remove -D`，lockfile 一併提交）。
+
+## 修正輪最終狀態
+```
+$ ec_gate.py gherkin student-photo-records  → PASS（37 個 Scenario）
+$ ec_gate.py coverage student-photo-records → PASS
+$ ec_gate.py tdd student-photo-records      → PASS（所有 Scenario 標題皆在測試檔案中出現）
+$ pnpm test
+ Test Files  11 passed (11)
+      Tests  118 passed (118)
+$ pnpm build → ✓ built in 830ms
+```
