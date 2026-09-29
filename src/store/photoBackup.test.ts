@@ -292,6 +292,8 @@ describe('無效的照片備份', () => {
     ['manifest 中有 id 不是非空字串的項目（空字串）', { id: '' }],
     ['manifest 中有 recordDate 不是 YYYY-MM-DD 的項目（斜線）', { recordDate: '2024/03/15' }],
     ['manifest 中有 recordDate 不是 YYYY-MM-DD 的項目（未補零）', { recordDate: '2024-3-5' }],
+    ['manifest 中有 recordDate 不是實際存在日期的項目（13 月 99 日）', { recordDate: '2024-13-99' }],
+    ['manifest 中有 recordDate 不是實際存在日期的項目（非閏年 2 月 29 日）', { recordDate: '2023-02-29' }],
     ['manifest 中有 width 或 height 不是正整數的項目（0）', { width: 0 }],
     ['manifest 中有 width 或 height 不是正整數的項目（小數）', { height: 1.5 }],
     ['manifest 中有 width 或 height 不是正整數的項目（字串）', { width: '2000' }],

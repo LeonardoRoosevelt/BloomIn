@@ -679,3 +679,37 @@ $ pnpm build → ✓ built in 830ms
      → Unable to find an element with the text: /BloomIn 已在其他分頁更新，請重新開啟 App/. …
 ```
 還原後全套：`Test Files 12 passed (12) / Tests 119 passed (119)`；gherkin／coverage／tdd 門禁 PASS；build 成功。
+
+---
+
+# 修正輪 3（使用者要求的四個小問題）
+
+## Fix 3-2 — 匯入接受不存在的日期；`Object.hasOwn` 防線
+規格：`coverage.md` 的「manifest 項目結構無效」條目加上「recordDate 不是實際存在的日期（如 2024-13-99、2023-02-29）」；`.feature` 的 Outline 新增 Example 列「manifest 中有 recordDate 不是實際存在日期的項目」。gherkin／coverage 門禁 PASS。
+### Red
+測試：`src/store/photoBackup.test.ts` 的 Outline 新增兩個變體（`2024-13-99`、`2023-02-29`）
+```
+   × …：manifest 中有 recordDate 不是實際存在日期的項目（13 月 99 日） 6ms
+     → expected true to be false // Object.is equality
+   × …：manifest 中有 recordDate 不是實際存在日期的項目（非閏年 2 月 29 日） 1ms
+     → expected true to be false // Object.is equality
+      Tests  2 failed | 31 passed (33)
+```
+失敗類型：功能未實作（只驗格式，不驗日期是否存在）
+### Green
+變更：`src/store/photoBackup.ts` 新增 `isRealDate`，以 `parseISODate` 建立日期後用 `toISODate` 比回原字串（Date 會把溢位日期默默進位）。
+```
+ Test Files  12 passed (12)
+      Tests  121 passed (121)
+```
+### `Object.hasOwn`：判定多餘並移除（行為不變，無 Red）
+- 查證：`Object.getOwnPropertyNames(Object.prototype)` 沒有任何含 `/` 的名稱；fflate `unzipSync` 回傳的是一般物件，原型就是 `Object.prototype`。`entryProblem` 已要求路徑以 `photos/`／`thumbs/` 開頭，所以經原型鏈命中的情況不可能發生；`manifest.json` 又是固定鍵。這道防線到不了任何輸入，所以 verifier 拿掉它測試仍全綠。
+- 決定：移除 `zipEntry`，改回直接索引，並在註解說明真正的防線是路徑前綴檢查。
+- 證明真正的防線有測試保護（突變：暫時拿掉 `file` 的前綴檢查，跑完即還原）：
+```
+   × …：manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（原型鏈屬性） 5ms
+     → expected true to be false // Object.is equality
+   × …：manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（manifest.json） 1ms
+     → expected true to be false // Object.is equality
+```
+還原後全套：`Tests 121 passed (121)`；build 成功。

@@ -1,4 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
+import { parseISODate, toISODate } from '../lib/date'
 import { shareFile, type ShareOutcome } from '../lib/share'
 import { getDb, PHOTOS_STORE, savePhotoBackupAt } from './db'
 import { isQuotaError, listAllPhotos, type Photo } from './photos'
@@ -129,8 +130,9 @@ export async function importPhotoBackup(
       skippedExisting++
       continue
     }
-    const blobBytes = zipEntry(files, entry.file)
-    const thumbBytes = zipEntry(files, entry.thumbFile)
+    // 路徑已在 entryProblem 限定為 photos/、thumbs/ 開頭；原型鏈上沒有含 '/' 的屬性，直接索引即可
+    const blobBytes = files[entry.file]
+    const thumbBytes = files[entry.thumbFile]
     // 少了圖檔就不是一張完整的照片：略過這張，不留下殘缺紀錄，其他照常匯入
     if (!blobBytes || !thumbBytes) {
       missingFile++
@@ -177,7 +179,7 @@ async function parsePhotoBackup(zipFile: Blob): Promise<ParsedBackup> {
   } catch {
     return { ok: false, error: '這不是有效的 zip 檔案，可能選錯檔案或檔案已損壞。' }
   }
-  const manifestBytes = zipEntry(files, 'manifest.json')
+  const manifestBytes = files['manifest.json']
   if (!manifestBytes) {
     return { ok: false, error: '這不是 BloomIn 的照片備份（缺少 manifest.json）。' }
   }
@@ -228,16 +230,23 @@ function entryProblem(entry: unknown): string | null {
   const e = entry as Record<string, unknown>
   if (!isNonEmptyString(e.id)) return '缺少有效的 id'
   if (!isNonEmptyString(e.studentId)) return '缺少有效的學生 id'
-  if (typeof e.recordDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(e.recordDate)) {
+  if (typeof e.recordDate !== 'string' || !isRealDate(e.recordDate)) {
     return '的紀錄日期格式不對'
   }
   if (typeof e.caption !== 'string') return '的說明欄位損壞'
   if (typeof e.createdAt !== 'string') return '的建立時間欄位損壞'
   if (!isPositiveInteger(e.width) || !isPositiveInteger(e.height)) return '的尺寸欄位損壞'
-  // 路徑限定在各自的目錄：擋下指向 manifest.json 或其他檔案的項目
+  // 路徑限定在各自的目錄：擋下指向 manifest.json 的項目，也讓 'constructor' 之類的
+  // 原型鏈屬性名（都不含 '/'）不可能被當成 zip 裡的檔案讀出來
   if (typeof e.file !== 'string' || !e.file.startsWith('photos/')) return '的原圖路徑不對'
   if (typeof e.thumbFile !== 'string' || !e.thumbFile.startsWith('thumbs/')) return '的縮圖路徑不對'
   return null
+}
+
+/** YYYY-MM-DD 且是日曆上真的存在的日期；Date 會把 2023-02-29 默默進位成 3/1，所以要比回原值。 */
+function isRealDate(iso: string): boolean {
+  const d = parseISODate(iso)
+  return d !== null && toISODate(d) === iso
 }
 
 function isNonEmptyString(v: unknown): v is string {
@@ -248,10 +257,6 @@ function isPositiveInteger(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v) && v > 0
 }
 
-/** 只看 zip 本身的項目：一般物件的索引會順著原型鏈找到 constructor 之類的屬性。 */
-function zipEntry(files: Record<string, Uint8Array>, path: string): Uint8Array | undefined {
-  return Object.hasOwn(files, path) ? files[path] : undefined
-}
 
 function jpeg(bytes: Uint8Array): Blob {
   return new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' })
