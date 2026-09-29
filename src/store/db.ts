@@ -8,16 +8,26 @@ import { openDB, type IDBPDatabase } from 'idb'
  * 不會出現寫到一半損毀的狀態。
  */
 const DB_NAME = 'bloomin'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE = 'kv'
 const STATE_KEY = 'state'
+/**
+ * 照片另存一個 store 而不進 state：照片是 Blob、體積大，
+ * 放進 state 會讓每次存檔都重寫整包，也會讓 JSON 備份暴增。
+ */
+export const PHOTOS_STORE = 'photos'
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
-function getDb(): Promise<IDBPDatabase> {
+export function getDb(): Promise<IDBPDatabase> {
   dbPromise ??= openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
+    // 依 oldVersion 增量升級：舊版使用者升級時只補缺的部分，kv 裡的資料原封不動
+    upgrade(db, oldVersion) {
+      if (oldVersion < 1) db.createObjectStore(STORE)
+      if (oldVersion < 2) {
+        const photos = db.createObjectStore(PHOTOS_STORE, { keyPath: 'id' })
+        photos.createIndex('studentId', 'studentId')
+      }
     },
   })
   return dbPromise

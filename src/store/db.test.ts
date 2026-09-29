@@ -1,0 +1,37 @@
+import 'fake-indexeddb/auto'
+import { openDB } from 'idb'
+import { describe, expect, it } from 'vitest'
+import { getDb, loadState } from './db'
+
+describe('IndexedDB 結構', () => {
+  it('資料庫升級保留既有資料（State）', async () => {
+    // Given 資料庫版本為 1，kv 中存有 state（模擬舊版 App 留下的資料庫）
+    const legacyState = { schemaVersion: 1, students: [{ id: 's1', name: '小明' }] }
+    const v1 = await openDB('bloomin', 1, {
+      upgrade(db) {
+        db.createObjectStore('kv')
+      },
+    })
+    await v1.put('kv', legacyState, 'state')
+    v1.close()
+
+    // When App 以版本 2 開啟資料庫
+    const loaded = await loadState()
+
+    // Then kv 中的 state 完整保留
+    expect(loaded).toEqual(legacyState)
+
+    // And photos 已建立且可依 studentId 查詢
+    const db = await getDb()
+    expect(db.version).toBe(2)
+    expect(db.objectStoreNames.contains('photos')).toBe(true)
+    const tx = db.transaction('photos', 'readwrite')
+    expect(tx.store.keyPath).toBe('id')
+    expect(tx.store.indexNames.contains('studentId')).toBe(true)
+    await tx.store.put({ id: 'p1', studentId: 's1' })
+    await tx.store.put({ id: 'p2', studentId: 's2' })
+    await tx.done
+    const ofS1 = await db.getAllFromIndex('photos', 'studentId', 's1')
+    expect(ofS1.map((p: { id: string }) => p.id)).toEqual(['p1'])
+  })
+})
