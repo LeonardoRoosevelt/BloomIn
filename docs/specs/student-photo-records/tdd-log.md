@@ -1031,3 +1031,6 @@ gherkin／coverage／tdd 門禁 PASS；build 成功。
       Tests  145 passed (145)
 ```
 build 成功。
+
+## 單元 5 — ADR：持久化與資料庫升級規則
+新增 `docs/decisions/0001-persistence-and-db-upgrades.md`，內容包括背景、六條決策（增量升級、blocked 提示、blocking 先寫後讓並擋住輸入、存檔串行化與失敗保留／常駐警告、還原寫入失敗 reject、照片與 state 分 store 且 JSON 備份不含照片）、後果（含仍待實機確認的項目）、下次修改 `DB_VERSION` 時的檢查清單，以及各規則對應的測試檔。純文件，無行為變更、無測試。
