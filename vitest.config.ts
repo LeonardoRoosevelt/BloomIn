@@ -1,9 +1,26 @@
 import { defineConfig } from 'vitest/config'
 
-// 刻意不沿用 vite.config.ts：測試只跑純函式，不需要 React 與 PWA plugin。
+// 刻意不沿用 vite.config.ts：測試不需要 PWA plugin。
+// 純函式與資料層（*.test.ts）跑 node；元件測試（*.test.tsx）才需要 DOM，跑 jsdom。
+// 分成兩個 project，讓既有的 node 測試不必付出 jsdom 的啟動成本與全域差異。
 export default defineConfig({
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+    projects: [
+      {
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'dom',
+          environment: 'jsdom',
+          include: ['src/**/*.test.tsx'],
+          setupFiles: ['src/test/setupDom.ts'],
+        },
+      },
+    ],
   },
 })
