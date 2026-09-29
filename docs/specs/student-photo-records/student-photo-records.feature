@@ -154,6 +154,17 @@ Feature: 學生照片紀錄本
       When 老師開啟學生 "ghost" 的照片紀錄本
       Then 顯示「找不到這位學生」
 
+    # coverage: Error Handling / 一般資料存檔失敗（不限照片功能）
+    @error
+    Scenario: 存檔失敗時保留變更並持續警告（Error Handling）
+      Given App 已載入，老師修改了資料
+      And 瀏覽器寫入 kv 時發生錯誤
+      When App 存檔
+      Then 顯示常駐警告「資料沒有存進裝置：<原因>。請先匯出備份。」
+      And 沒有未處理的錯誤
+      When 寫入恢復正常後 App 再次存檔
+      Then 剛才的修改寫進裝置，警告消失
+
     # coverage: Error Handling / 編輯或刪除時寫入失敗
     @error
     Scenario: 編輯或刪除失敗時顯示錯誤（Error Handling）

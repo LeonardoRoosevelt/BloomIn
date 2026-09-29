@@ -8,6 +8,7 @@ import {
 } from './icons'
 import { navigate, useRoute, type Route } from '../lib/router'
 import { BackupBanner } from './BackupBanner'
+import { PersistErrorBanner } from './PersistErrorBanner'
 import s from './AppShell.module.css'
 
 const NAV: readonly {
@@ -50,6 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <div className={s.content}>
+        <PersistErrorBanner />
         <BackupBanner />
         <div className={s.inner}>{children}</div>
       </div>

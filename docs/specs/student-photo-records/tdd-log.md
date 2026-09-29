@@ -774,3 +774,41 @@ $ pnpm build → ✓ built in 830ms
       Tests  127 passed (127)
 ```
 build 成功。
+
+## Fix 3-4 — 一般存檔失敗丟掉變更（不限照片功能）
+規格：`coverage.md` Error Handling 新增「一般資料（kv `state`）存檔失敗」條目，並註明這是整個 App 既有存檔機制的修正，不限於照片功能；`.feature` 新增 Scenario「存檔失敗時保留變更並持續警告（Error Handling）」。gherkin／coverage 門禁 PASS。
+### Red
+測試：新檔 `src/App.persist.test.tsx`（jsdom＋真正的 `<App />`；spy `IDBObjectStore.prototype.put` 拋 UnknownError）
+- 主案例：修改 → 存檔失敗 → 應出現警告且無未處理的錯誤 → 寫入恢復後再存檔 → 讀得到修改、警告消失
+- 變體「失敗期間又有新變更時保留較新的」：在失敗的 put 裡先做一次新修改，再拋錯
+```
+   × 存檔失敗 > 存檔失敗時保留變更並持續警告（Error Handling） 94ms
+     → Internal error writing to the database.
+   × 存檔失敗 > 存檔失敗時保留變更並持續警告（Error Handling）：失敗期間又有新變更時保留較新的 13ms
+     → Internal error writing to the database.
+      Tests  2 failed (2)
+```
+失敗類型：功能未實作。`flushPersist` 直接拋出寫入錯誤（計時器路徑會變成未處理的 rejection），而且寫入前已把 `pending` 清成 null，這筆變更無法重試。
+### Green
+變更：
+- `src/store/useStore.ts`：新增 `persistError`。`flushPersist` 以 try/catch 包住 `saveState`：成功時清掉 `persistError`；失敗時 `pending ??= state`（期間已有較新的完整快照就保留新的），設定 `persistError`，不往外拋。superseded 時仍直接不寫入（修正輪 2 的邏輯不變）。
+- 新增 `src/components/PersistErrorBanner.tsx`＋`.module.css`：不能關閉的常駐警告（role=alert）「資料沒有存進裝置：<原因>。請先匯出備份。」，放在 `AppShell` 最上方、備份提醒之前。
+```
+ Test Files  14 passed (14)
+      Tests  129 passed (129)
+```
+突變檢查（把 `pending ??= state` 改成 `pending = state`，用舊快照蓋掉新變更，跑完即還原）：
+```
+   × …：失敗期間又有新變更時保留較新的 19ms
+     → expected '舊名稱' to be '新名稱' // Object.is equality
+```
+還原後全套：`Tests 129 passed (129)`；build 成功。
+
+## 修正輪 3 最終狀態
+```
+$ ec_gate.py gherkin student-photo-records  → PASS
+$ ec_gate.py coverage student-photo-records → PASS
+$ ec_gate.py tdd student-photo-records      → PASS
+$ pnpm test → Test Files 14 passed (14) / Tests 129 passed (129)
+$ pnpm build → 成功
+```

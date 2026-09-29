@@ -1,0 +1,29 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  padding-top: calc(var(--safe-t) + var(--sp-3));
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: var(--lh-normal);
+}
+
+.icon {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .banner {
+    padding-top: var(--sp-3);
+  }
+}

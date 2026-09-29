@@ -21,6 +21,8 @@ interface StoreState {
   upgradeBlocked: boolean
   /** 本分頁已把資料庫讓給較新版本，無法再讀寫；畫面必須擋住輸入並請使用者重新開啟 */
   superseded: boolean
+  /** 最近一次存檔失敗的原因；非 null 時畫面必須常駐警告，下次成功寫入後清除 */
+  persistError: string | null
 
   hydrate: () => Promise<void>
   /**
@@ -60,6 +62,7 @@ export const useStore = create<StoreState>((set) => ({
   hydrateError: null,
   upgradeBlocked: false,
   superseded: false,
+  persistError: null,
 
   /**
    * 載入失敗時不得靜默 —— 之前這裡的例外會讓 App 停在完全空白的畫面，
@@ -249,7 +252,16 @@ export async function flushPersist(): Promise<void> {
   if (!pending) return
   const state = pending
   pending = null
-  await saveState(state)
+  try {
+    await saveState(state)
+    if (useStore.getState().persistError !== null) useStore.setState({ persistError: null })
+  } catch (err) {
+    // 沒存進去的變更不能丟：放回 pending 等下次存檔重試。
+    // 寫入期間若又有新變更，保留新的 —— 每次存的都是完整快照，新的已包含這次的內容
+    pending ??= state
+    // 不往外拋：呼叫端多是計時器或頁面事件，拋出只會變成沒人處理的錯誤；改由畫面常駐警告
+    useStore.setState({ persistError: err instanceof Error ? err.message : String(err) })
+  }
 }
 
 // 被較新版本取代時：先交出還沒存的 state 讓 db.ts 寫入，再標記 superseded 讓畫面擋住輸入
