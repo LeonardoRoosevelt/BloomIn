@@ -955,3 +955,39 @@ build 成功。
       Tests  135 passed (135)
 ```
 build 成功。
+
+## 單元 3a — 每位學生分開匯出照片備份
+規格：
+- `coverage.md`：Happy Path 的「匯出照片備份」改寫為逐位學生匯出（記下設計審查的理由）；Error Handling「取消分享」寫明依學生的 kv key；Integration 補「檔名含姓名與不允許字元的處理」與「匯入舊版全部照片備份」（說明 manifest 只加 `scope`、不提升 `schemaVersion` 的理由）；待決定段落註記備份時間改為每位學生記錄。
+- `.feature`：「匯出照片備份（Happy Path）」「照片備份透過分享面板送出（Integration）」「匯出的備份可被匯入還原（Integration）」三個 Scenario 刪除，改寫成下列逐學生版本：
+  - 照片備份區列出有照片的學生（Happy Path）
+  - 匯出某位學生的照片備份（Happy Path）
+  - 沒有任何照片時照片備份區顯示空狀態（Edge Case）
+  - 照片備份處理中停用所有按鈕（Edge Case）
+  - 學生照片備份透過分享面板送出（Integration）
+  - 學生姓名含檔名不允許的字元時仍能匯出（Edge Case）
+  - 匯出的學生照片備份可被匯入還原（Integration）
+  - 舊版的全部照片備份仍可匯入（Integration）
+  「取消分享時不算備份完成（Error Handling）」標題不變，內容改為 `photoBackupAt:s1`。
+- `docs/schema.dbml`：kv key 改為 `photoBackupAt:<studentId>`／`photoBackupAt:unassigned`。
+- coverage／gherkin／dbml 門禁 PASS。
+- 被取代的三個舊 Scenario，其舊測試（呼叫已移除的 `exportPhotoBackup`）一併刪除，由下列新測試取代。
+
+| Slice | 測試 | Red | Green |
+|---|---|---|---|
+| 3a-1 照片備份區列出有照片的學生（Happy Path） | `src/components/PhotoBackupPanel.test.tsx` | `Unable to find an element with the text: 王小明`（舊面板只有全部匯出） | `photos.ts` `countPhotosByStudent`（只讀 photos 的 studentId 索引 key cursor）；`db.ts` `loadPhotoBackupTime(owner)`；面板改為逐位學生列表（姓名、N 張 · 從未備份／今天／N 天前、匯出按鈕） |
+| 3a-2 匯出某位學生的照片備份（Happy Path） | 同上（stub `navigator.canShare/share`、unzip 驗證 manifest、scope、只含 s1 圖檔、kv） | `Unable to find an element with the text: /已送出照片備份/`（匯出按鈕沒有動作） | `photoBackup.ts` 改為純函式 `buildPhotoBackup(photos, now, scope)`，manifest 加 `scope`，移除 `exportPhotoBackup`；`photos.ts` `listStudentPhotosWithBlobs`；`db.ts` 移除舊的單一 `photoBackupAt`，新增 `savePhotoBackupTime(owner, at)`；面板負責 `shareFile` 與非 cancelled 時記錄時間。離線測試改用與面板相同的組合步驟 |
+| 3a-3 學生照片備份透過分享面板送出（Integration） | 同上 | `expected false to be true`（檔名沒有姓名） | `photoBackupFileName(now, scope)`：`bloomin-照片備份-<姓名或未歸屬>-YYYYMMDD-HHmm.zip` |
+| 3a-4 學生姓名含檔名不允許的字元時仍能匯出（Edge Case） | `src/store/photoBackup.test.ts` | `expected 'bloomin-照片備份-A/B\C:D*E?F"G<H>I\|J-2026…' not to contain '/'` | 姓名中 `/ \ : * ? " < > \|` 換成 `_` |
+| 3a-5 取消分享時不算備份完成（Error Handling） | 面板 | 第一次就綠：3a-2 的 Green 沿用了「非 cancelled 才記錄」 | 突變（拿掉判斷）→ `expected '2026-09-29T03:42:33.591Z' to be '2026-09-01T00:00:00.000Z'` |
+| 3a-6 匯出的學生照片備份可被匯入還原（Integration） | store 層：`listStudentPhotosWithBlobs` → `buildPhotoBackup` → 清空 → 匯入 → 逐欄比對 | 第一次就綠 | 突變（打包不寫縮圖）→ `expected [] to deeply equal [ { studentId: 's1', …(8) }, …(1) ]` |
+| 3a-7 舊版的全部照片備份仍可匯入（Integration） | store 層：沒有 scope、含兩位學生的 zip | 第一次就綠：匯入端本來就不讀 scope | 突變（匯入時要求 scope）→ 該測試（連同所有以舊格式 Given 的匯入測試）失敗 |
+| 3a-8 沒有任何照片時照片備份區顯示空狀態（Edge Case） | 面板 | `Unable to find an element with the text: /還沒有任何照片/` | 空狀態說明文字 |
+| 3a-9 照片備份處理中停用所有按鈕（Edge Case） | 面板（分享面板停住不回應） | 第一次就綠：3a-1 起所有按鈕即綁 `disabled={busy}` | 突變（學生列的匯出按鈕拿掉 disabled）→ `expected false to be true` |
+
+清理：移除 photoBackup.test 中因舊匯出測試刪除而不再使用的輔助函式與舊 kv key 的清除。
+```
+ Test Files  17 passed (17)
+      Tests  140 passed (140)
+```
+gherkin／coverage／tdd 門禁 PASS；build 成功。

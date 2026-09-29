@@ -36,6 +36,16 @@ export async function listAllPhotos(): Promise<Photo[]> {
   return photos
 }
 
+/** 某位學生的所有照片（含原圖），照片備份逐位學生打包用。 */
+export async function listStudentPhotosWithBlobs(studentId: string): Promise<Photo[]> {
+  const db = await getDb()
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readonly')
+  const records = (await tx.objectStore(PHOTOS_STORE).index('studentId').getAll(studentId)) as PhotoSummary[]
+  const photos = await withBlobs(tx.objectStore(PHOTO_BLOBS_STORE), records)
+  await tx.done
+  return photos
+}
+
 /** 替中繼資料補上原圖；原圖缺失的（理論上不會發生，兩邊同一交易寫入）不列入。 */
 async function withBlobs(
   blobStore: { get(key: string): Promise<unknown> },
@@ -53,6 +63,19 @@ async function withBlobs(
 export async function countPhotos(studentId: string): Promise<number> {
   const db = await getDb()
   return db.countFromIndex(PHOTOS_STORE, 'studentId', studentId)
+}
+
+/** 每位學生（studentId）的照片張數；照片備份區用來列出有照片的學生。只讀 photos，不碰原圖。 */
+export async function countPhotosByStudent(): Promise<Map<string, number>> {
+  const db = await getDb()
+  const counts = new Map<string, number>()
+  let cursor = await db.transaction(PHOTOS_STORE).store.index('studentId').openKeyCursor()
+  while (cursor) {
+    const studentId = cursor.key as string
+    counts.set(studentId, (counts.get(studentId) ?? 0) + 1)
+    cursor = await cursor.continue()
+  }
+  return counts
 }
 
 /** photos store 裡的記錄，也是列表用的照片：不帶原圖，畫面只能拿縮圖來顯示。 */

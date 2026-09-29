@@ -122,16 +122,22 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
  * 刻意不進 AppState：放進去就得改 SCHEMA_VERSION 與既有 JSON 備份格式，
  * 而照片備份本來就是獨立的檔案。只有真的送出備份才更新。
  */
-const PHOTO_BACKUP_AT_KEY = 'photoBackupAt'
 
-export async function loadPhotoBackupAt(): Promise<string | null> {
+/**
+ * 照片備份逐位學生匯出，所以備份時間也逐位學生記錄（以這台裝置為準）。
+ * owner 是學生 id；所屬學生不在目前資料中的照片用 'unassigned'。
+ */
+export type PhotoBackupOwner = string
+export const UNASSIGNED_OWNER: PhotoBackupOwner = 'unassigned'
+
+export async function loadPhotoBackupTime(owner: PhotoBackupOwner): Promise<string | null> {
   const db = await getDb()
-  return ((await db.get(STORE, PHOTO_BACKUP_AT_KEY)) as string | undefined) ?? null
+  return ((await db.get(STORE, `photoBackupAt:${owner}`)) as string | undefined) ?? null
 }
 
-export async function savePhotoBackupAt(at: string): Promise<void> {
+export async function savePhotoBackupTime(owner: PhotoBackupOwner, at: string): Promise<void> {
   const db = await getDb()
-  await db.put(STORE, at, PHOTO_BACKUP_AT_KEY)
+  await db.put(STORE, at, `photoBackupAt:${owner}`)
 }
 
 /* ── 可行性自檢專用記錄 ──────────────────────────────

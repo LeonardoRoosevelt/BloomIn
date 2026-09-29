@@ -30,9 +30,9 @@
 - 情境：編輯既有照片的紀錄日期或說明
   - 預期行為：列表立即反映；照片本身不變。
   - 資料需求：更新 `photo.recordDate`、`photo.caption`。
-- 情境：在設定 → 備份頁按「匯出照片備份」
-  - 預期行為：產生一個 zip（內含每張 JPEG 與一份 manifest JSON：`app: 'bloomin-photos'`、`schemaVersion`、`exportedAt`、每張照片的中繼資料）；交給 `shareFile()` 送出。
-  - 資料需求：讀取全部 `photo`；manifest 欄位與 `photo` 中繼資料一一對應。
+- 情境：在設定頁的「照片備份」區，逐位學生匯出照片備份（2026-09-29 設計審查決定：取代「一次匯出全部照片」，限制單一 zip 的體積；iOS 每次分享都需要使用者點擊，無法一鍵連續匯出多份）
+  - 預期行為：區內列出每位有照片的學生（姓名、張數、上次備份時間「從未備份／今天／N 天前」、匯出按鈕）；按下某位學生的匯出，只打包該學生的照片成一個 zip（每張原圖與縮圖 JPEG，加上 manifest JSON：`app: 'bloomin-photos'`、`schemaVersion`、`exportedAt`、`scope`（哪位學生）、每張照片的中繼資料），檔名 `bloomin-照片備份-<姓名>-YYYYMMDD-HHmm.zip`，交給 `shareFile()` 送出；送出（非取消）後只更新該學生的上次備份時間。沒有任何照片時顯示簡短的空狀態。處理中停用所有按鈕。
+  - 資料需求：依 `photo.studentId` 索引讀出該學生的照片與 `photoBlobs` 原圖；上次備份時間存於 kv `photoBackupAt:<studentId>`（以這台裝置為準）。打包是純函式（`buildPhotoBackup`），送出與記錄時間在畫面層，與資料備份（`buildBackup` / BackupPanel）同一種形狀。
 - 情境：在新裝置先還原 JSON 備份、再匯入照片備份 zip
   - 預期行為：照片全部回到各自學生的紀錄本；顯示「已匯入 N 張」。
   - 資料需求：`photo.id` 保留原值寫回。
@@ -92,8 +92,8 @@
   - 預期行為：停止，回報「已匯入 N 張，剩下 M 張因空間不足未匯入」；已匯入的保留（重跑匯入會因 id 已存在而跳過，可接續）。
   - 資料需求：`photo.id` unique。
 - 情境：匯出時分享面板被取消
-  - 預期行為：顯示「已取消，這次沒有備份照片」，不視為備份完成。
-  - 資料需求：無。
+  - 預期行為：顯示「已取消，這次沒有備份照片」，不視為備份完成：該學生的上次備份時間不變。
+  - 資料需求：kv `photoBackupAt:<studentId>` 不寫入。
 - 情境：學生 id 不存在（直接開到壞連結）
   - 預期行為：沿用學生詳情頁的「找不到這位學生」空狀態。
   - 資料需求：無。
@@ -140,9 +140,12 @@
   - 資料需求：`blocking` 事件中同步取得未寫入的 state，在同一條連線上建立寫入交易後才 `close()`（close 會等已建立的交易完成）。
 
 ### 6. Integration Points
-- 情境：`shareFile()` 匯出照片備份 zip
-  - 預期行為：iOS 走原生分享面板；不支援時退回下載；取消回傳 `cancelled`（見 Error Handling）。
+- 情境：`shareFile()` 匯出某位學生的照片備份 zip
+  - 預期行為：iOS 走原生分享面板；不支援時退回下載；取消回傳 `cancelled`（見 Error Handling）。檔名含學生姓名；姓名中檔名不允許的字元（至少 `/ \ : * ? " < > |`）替換掉，匯出照常進行。
   - 資料需求：無。
+- 情境：匯入舊版（逐學生匯出之前）的全部照片備份
+  - 預期行為：沒有 `scope` 欄位、含多位學生照片的 manifest 照常匯入，照片回到各自學生的紀錄本。manifest 只增加 `scope` 欄位，不提升 `schemaVersion`（舊版 App 會忽略多出的欄位，提升版本反而會讓舊版拒絕新檔）。
+  - 資料需求：匯入端不依賴 `scope`。
 - 情境：zip 產生／解析（需要 zip 編解碼能力，目前專案沒有相關依賴）
   - 預期行為：照片已是 JPEG，zip 採 store（不壓縮）即可；大量照片時不讓畫面卡死（顯示進度或處理中狀態）。失敗時顯示錯誤，不寫入任何照片。
   - 資料需求：無。
@@ -159,7 +162,7 @@
 ## 待使用者決定
 - 無。以下細節已於 2026-09-29 由使用者確認「照預設」：
   - 紀錄日期精確到日（YYYY-MM-DD），新增時預設今天；列表依月分組。
-  - v1 不做照片備份提醒；備份頁顯示「上次照片備份時間」，存於 IndexedDB `kv`（key `photoBackupAt`），不進 AppState。
+  - v1 不做照片備份提醒；備份頁顯示「上次照片備份時間」，存於 IndexedDB `kv`，不進 AppState。（2026-09-29 設計審查改為每位學生各自記錄：key `photoBackupAt:<studentId>`，未歸屬照片用 `photoBackupAt:unassigned`；以這台裝置為準。）
   - zip 使用 `fflate`，store 模式（不壓縮）。
   - 縮圖長邊 400px、JPEG 品質 0.7；原圖長邊 2000px、JPEG 品質 0.85。
   - 照片紀錄本為獨立子頁面（路由 `student-photos`），學生詳情頁放入口與張數。

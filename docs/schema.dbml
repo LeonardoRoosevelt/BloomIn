@@ -9,14 +9,15 @@ Project bloomin {
 }
 
 Table kv {
-  key   varchar [primary key, note: '"state" | "selfcheck" | "rollback" | "photoBackupAt"']
+  key   varchar [primary key, note: '"state" | "selfcheck" | "rollback" | "photoBackupAt:<studentId>" | "photoBackupAt:unassigned"']
   value json    [not null]
 
   Note: '''
   IndexedDB object store "kv"（out-of-line key）。
-  "photoBackupAt" 存最後一次成功匯出照片備份的 ISO 時間，刻意不進 AppState，
+  "photoBackupAt:<studentId>" 存這台裝置上最後一次成功匯出該學生照片備份的 ISO 時間；
+  "photoBackupAt:unassigned" 則是未歸屬照片（所屬學生不在目前資料中）的。刻意不進 AppState，
   以免改動 SCHEMA_VERSION 與既有 JSON 備份格式；只有真的送出才更新，
-  見 Scenario「取消分享時不算備份完成（Error Handling）」。
+  見 Scenario「匯出某位學生的照片備份（Happy Path）」「取消分享時不算備份完成（Error Handling）」。
   '''
 }
 

@@ -215,14 +215,38 @@ Feature: 學生照片紀錄本
 
   Rule: 照片備份是獨立的 zip，匯入只做合併且絕不覆蓋
 
-    # coverage: Happy Path / 匯出照片備份
+    # coverage: Happy Path / 逐位學生匯出照片備份
     @happy-path
-    Scenario: 匯出照片備份（Happy Path）
-      Given photos 中有 2 筆記錄 "p1"、"p2"
-      When 老師匯出照片備份
-      Then 產生的 zip 含 manifest.json，其 app 為 "bloomin-photos" 且列出 "p1"、"p2" 的中繼資料
-      And zip 含 photos/p1.jpg 與 photos/p2.jpg
-      And kv 的 photoBackupAt 更新為匯出時間
+    Scenario: 照片備份區列出有照片的學生（Happy Path）
+      Given students 中有 "王小明"（s1）、"陳小美"（s2）、"林大同"（s3）
+      And photos 中 s1 有 2 張、s2 有 1 張、s3 沒有照片
+      And kv 的 photoBackupAt:s2 為 3 天前
+      When 老師開啟設定頁的照片備份區
+      Then 列出 "王小明 2 張 從未備份" 與 "陳小美 1 張 3 天前"，每列都有匯出按鈕
+      And 不列出 "林大同"
+
+    # coverage: Happy Path / 逐位學生匯出照片備份
+    @happy-path
+    Scenario: 匯出某位學生的照片備份（Happy Path）
+      Given photos 中 s1 有 "p1"、"p2"，s2 有 "p3"
+      When 老師在照片備份區匯出 "王小明" 的照片備份
+      Then 產生的 zip 含 manifest.json，其 app 為 "bloomin-photos"、scope 為學生 s1，且只列出 "p1"、"p2" 的中繼資料
+      And zip 含 photos/p1.jpg 與 photos/p2.jpg，不含 "p3" 的圖檔
+      And kv 的 photoBackupAt:s1 更新為匯出時間，photoBackupAt:s2 不變
+
+    # coverage: Happy Path / 逐位學生匯出照片備份
+    @edge-case
+    Scenario: 沒有任何照片時照片備份區顯示空狀態（Edge Case）
+      Given photos 為空
+      When 老師開啟設定頁的照片備份區
+      Then 顯示還沒有照片的簡短說明，不列出任何學生
+
+    # coverage: Happy Path / 逐位學生匯出照片備份
+    @edge-case
+    Scenario: 照片備份處理中停用所有按鈕（Edge Case）
+      Given photos 中 s1、s2 各有照片
+      When 老師匯出 "王小明" 的照片備份，打包還在進行中
+      Then 照片備份區的所有匯出與匯入按鈕都停用
 
     # coverage: Happy Path / 新裝置先還原 JSON 再匯入照片
     @happy-path
@@ -294,9 +318,9 @@ Feature: 學生照片紀錄本
     # coverage: Error Handling / 匯出時取消分享
     @error
     Scenario: 取消分享時不算備份完成（Error Handling）
-      Given kv 的 photoBackupAt 為 "2026-09-01T00:00:00Z"
-      When 老師匯出照片備份但在分享面板按取消
-      Then kv 的 photoBackupAt 仍為 "2026-09-01T00:00:00Z"
+      Given kv 的 photoBackupAt:s1 為 "2026-09-01T00:00:00.000Z"
+      When 老師匯出 "王小明" 的照片備份但在分享面板按取消
+      Then kv 的 photoBackupAt:s1 仍為 "2026-09-01T00:00:00.000Z"
       And 回報這次沒有備份照片
 
   Rule: 照片可刪除，但必須二次確認
@@ -361,19 +385,33 @@ Feature: 學生照片紀錄本
 
   Rule: 與瀏覽器能力的串接失敗時要可預期
 
-    # coverage: Integration Points / shareFile 匯出
+    # coverage: Integration Points / shareFile 匯出某位學生的照片備份
     @integration
-    Scenario: 照片備份透過分享面板送出（Integration）
+    Scenario: 學生照片備份透過分享面板送出（Integration）
       Given 裝置支援以分享面板送出檔案
-      When 老師匯出照片備份
-      Then zip 檔以分享面板送出，檔名以 "bloomin-照片備份-" 開頭並以 ".zip" 結尾
+      When 老師匯出 "王小明" 的照片備份
+      Then zip 檔以分享面板送出，檔名以 "bloomin-照片備份-王小明-" 開頭並以 ".zip" 結尾
+
+    # coverage: Integration Points / shareFile 匯出某位學生的照片備份
+    @edge-case
+    Scenario: 學生姓名含檔名不允許的字元時仍能匯出（Edge Case）
+      Given 學生姓名為 'A/B\C:D*E?F"G<H>I|J'
+      When 產生該學生的照片備份檔名
+      Then 檔名不含 / \ : * ? " < > | 任何一個字元，且仍以 "bloomin-照片備份-" 開頭、".zip" 結尾
 
     # coverage: Integration Points / zip 編解碼
     @integration
-    Scenario: 匯出的備份可被匯入還原（Integration）
-      Given photos 中有 2 筆記錄
-      When 老師匯出照片備份，清空 photos 後再匯入同一份
-      Then photos 中的 2 筆記錄與匯出前完全相同，包含 blob 與 thumb 的內容
+    Scenario: 匯出的學生照片備份可被匯入還原（Integration）
+      Given photos 中 s1 有 2 筆記錄
+      When 老師匯出 "王小明" 的照片備份，清空照片後再匯入同一份
+      Then photos 中的 2 筆記錄與匯出前完全相同，包含原圖與 thumb 的內容
+
+    # coverage: Integration Points / 匯入舊版的全部照片備份
+    @integration
+    Scenario: 舊版的全部照片備份仍可匯入（Integration）
+      Given 一份沒有 scope 欄位、含 s1 的 "p1" 與 s2 的 "p2" 的照片備份 zip（逐學生匯出之前的格式）
+      When 老師匯入這份照片備份
+      Then photos 中存在 "p1"、"p2"，各自屬於原本的學生
 
     # coverage: Integration Points / storageEstimate
     @integration

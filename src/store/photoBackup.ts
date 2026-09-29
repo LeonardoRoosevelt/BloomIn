@@ -1,8 +1,8 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { parseISODate, toISODate } from '../lib/date'
-import { shareFile, type ShareOutcome } from '../lib/share'
-import { getDb, PHOTOS_STORE, savePhotoBackupAt } from './db'
-import { isQuotaError, listAllPhotos, putPhoto, type Photo } from './photos'
+import type { ShareOutcome } from '../lib/share'
+import { getDb, PHOTOS_STORE } from './db'
+import { isQuotaError, putPhoto, type Photo } from './photos'
 
 /**
  * 照片備份檔（zip）。
@@ -28,25 +28,44 @@ export interface PhotoManifestEntry {
   thumbFile: string
 }
 
+/**
+ * 這份備份裝的是哪些照片：某位學生，或所屬學生不在目前資料中的「未歸屬」照片。
+ * 只是給人看與日後辨識用；匯入端不依賴它（舊版的全部照片備份沒有這個欄位也能匯入），
+ * 所以加這個欄位不提升 schemaVersion —— 提升反而會讓舊版 App 拒絕新檔。
+ */
+export type PhotoBackupScope =
+  | { kind: 'student'; studentId: string; studentName: string }
+  | { kind: 'unassigned' }
+
 export interface PhotoManifest {
   app: typeof PHOTO_BACKUP_APP_ID
   schemaVersion: number
   exportedAt: string
+  scope: PhotoBackupScope
   photos: PhotoManifestEntry[]
 }
 
-/** 檔名含日期時間，同一天多次備份不會互相覆蓋。 */
-export function photoBackupFileName(now: Date): string {
+/** 檔名含學生姓名（或「未歸屬」）與日期時間：一眼看得出是誰的，同一天多次備份也不會互相覆蓋。 */
+export function photoBackupFileName(now: Date, scope: PhotoBackupScope): string {
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
-  return `bloomin-照片備份-${y}${m}${d}-${hh}${mm}.zip`
+  // 這些字元在 iOS「檔案」、Windows 或 zip 工具裡不能出現在檔名中，換成底線，姓名其餘部分照留
+  const who = scope.kind === 'student' ? scope.studentName.replace(/[/\\:*?"<>|]/g, '_') : '未歸屬'
+  return `bloomin-照片備份-${who}-${y}${m}${d}-${hh}${mm}.zip`
 }
 
-export async function exportPhotoBackup(now: Date): Promise<ShareOutcome> {
-  const photos = await listAllPhotos()
+/**
+ * 把一份照片打包成 zip（純函式：不讀資料庫、不送出、不記時間）。
+ * 送出與記錄備份時間在畫面層，與資料備份的 buildBackup／BackupPanel 同一種分工。
+ */
+export async function buildPhotoBackup(
+  photos: readonly Photo[],
+  now: Date,
+  scope: PhotoBackupScope,
+): Promise<File> {
   const files: Zippable = {}
   const entries: PhotoManifestEntry[] = []
   for (const p of photos) {
@@ -70,16 +89,13 @@ export async function exportPhotoBackup(now: Date): Promise<ShareOutcome> {
     app: PHOTO_BACKUP_APP_ID,
     schemaVersion: PHOTO_BACKUP_SCHEMA_VERSION,
     exportedAt: now.toISOString(),
+    scope,
     photos: entries,
   }
   files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
   // 照片已是 JPEG，再壓縮幾乎沒有效果，只會多花時間：level 0 即 store 模式
   const zip = zipSync(files, { level: 0 })
-  const file = new File([zip], photoBackupFileName(now), { type: 'application/zip' })
-  const outcome = await shareFile(file, 'BloomIn 照片備份')
-  // 只有真的送出去才算備份完成；取消了還記時間，會讓人以為照片已經有備份
-  if (outcome !== 'cancelled') await savePhotoBackupAt(now.toISOString())
-  return outcome
+  return new File([zip], photoBackupFileName(now, scope), { type: 'application/zip' })
 }
 
 export function describeExport(outcome: ShareOutcome): string {

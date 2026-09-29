@@ -1,9 +1,8 @@
 import 'fake-indexeddb/auto'
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDb, loadPhotoBackupAt, savePhotoBackupAt } from './db'
-import { describeExport, describeImport, exportPhotoBackup, importPhotoBackup } from './photoBackup'
-import { deletePhoto, getPhoto, listAllPhotos } from './photos'
+import { buildPhotoBackup, describeImport, importPhotoBackup, photoBackupFileName } from './photoBackup'
+import { deletePhoto, getPhoto, listAllPhotos, listStudentPhotosWithBlobs } from './photos'
 import { clearPhotoStores, photoRecord, seedPhotos } from '../test/photoFixtures'
 import { simulateTransactionAbort } from '../test/storageFull'
 
@@ -11,26 +10,12 @@ const NOW = new Date('2026-09-29T14:05:00+08:00')
 
 beforeEach(async () => {
   await clearPhotoStores()
-  await (await getDb()).delete('kv', 'photoBackupAt')
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
-
-/** 模擬支援分享檔案的裝置；回傳被送進分享面板的檔案。 */
-function stubShareSheet(outcome: 'share' | 'cancel' = 'share'): { shared: File[] } {
-  const shared: File[] = []
-  vi.stubGlobal('navigator', {
-    canShare: () => true,
-    share: async ({ files }: { files: File[] }) => {
-      if (outcome === 'cancel') throw new DOMException('Share canceled', 'AbortError')
-      shared.push(...files)
-    },
-  })
-  return { shared }
-}
 
 /**
  * 依照片備份格式手工組一份 zip（不經過匯出程式，當作獨立的 Given）。
@@ -84,59 +69,17 @@ async function snapshot() {
   )
 }
 
-async function unzipFile(file: File) {
-  return unzipSync(new Uint8Array(await file.arrayBuffer()))
-}
+describe('照片備份檔名', () => {
+  it('學生姓名含檔名不允許的字元時仍能匯出（Edge Case）', () => {
+    const name = photoBackupFileName(NOW, { kind: 'student', studentId: 's1', studentName: 'A/B\\C:D*E?F"G<H>I|J' })
 
-describe('匯出照片備份', () => {
-  it('匯出照片備份（Happy Path）', async () => {
-    await seedPhotos(
-      photoRecord({ id: 'p1', caption: '簽到卡', recordDate: '2024-03-15' }),
-      photoRecord({ id: 'p2', studentId: 's2', recordDate: '2024-05-02' }),
-    )
-    const { shared } = stubShareSheet()
-
-    await exportPhotoBackup(NOW)
-
-    expect(shared).toHaveLength(1)
-    const entries = await unzipFile(shared[0]!)
-    const manifest = JSON.parse(strFromU8(entries['manifest.json']!)) as {
-      app: string
-      photos: { id: string; studentId: string; recordDate: string; caption: string }[]
+    for (const forbidden of ['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+      expect(name).not.toContain(forbidden)
     }
-    expect(manifest.app).toBe('bloomin-photos')
-    expect(manifest.photos.map((p) => p.id).sort()).toEqual(['p1', 'p2'])
-    expect(manifest.photos.find((p) => p.id === 'p1')).toMatchObject({
-      studentId: 's1',
-      recordDate: '2024-03-15',
-      caption: '簽到卡',
-    })
-    expect(strFromU8(entries['photos/p1.jpg']!)).toBe('BLOB-p1')
-    expect(strFromU8(entries['photos/p2.jpg']!)).toBe('BLOB-p2')
-    expect(await loadPhotoBackupAt()).toBe(NOW.toISOString())
-  })
-
-  it('照片備份透過分享面板送出（Integration）', async () => {
-    await seedPhotos(photoRecord({ id: 'p1' }))
-    const { shared } = stubShareSheet()
-
-    const outcome = await exportPhotoBackup(NOW)
-
-    expect(outcome).toBe('shared')
-    const name = shared[0]!.name
     expect(name.startsWith('bloomin-照片備份-')).toBe(true)
     expect(name.endsWith('.zip')).toBe(true)
-  })
-
-  it('取消分享時不算備份完成（Error Handling）', async () => {
-    await savePhotoBackupAt('2026-09-01T00:00:00Z')
-    await seedPhotos(photoRecord({ id: 'p1' }))
-    stubShareSheet('cancel')
-
-    const outcome = await exportPhotoBackup(NOW)
-
-    expect(await loadPhotoBackupAt()).toBe('2026-09-01T00:00:00Z')
-    expect(describeExport(outcome)).toContain('這次沒有備份照片')
+    // 姓名的其餘部分仍看得出來
+    expect(name).toMatch(/A.B.C.D.E.F.G.H.I.J/)
   })
 })
 
@@ -233,20 +176,33 @@ describe('匯入照片備份', () => {
     expect(await back!.blob.text()).toBe('BLOB-p1')
   })
 
-  it('匯出的備份可被匯入還原（Integration）', async () => {
+  it('匯出的學生照片備份可被匯入還原（Integration）', async () => {
     await seedPhotos(
       photoRecord({ id: 'p1', caption: '第 1 頁', width: 1500, height: 2000 }),
-      photoRecord({ id: 'p2', studentId: 's2', recordDate: '2019-01-05', createdAt: '2026-09-02T10:00:00.000Z' }),
+      photoRecord({ id: 'p2', recordDate: '2019-01-05', createdAt: '2026-09-02T10:00:00.000Z' }),
     )
     const before = await snapshot()
-    const { shared } = stubShareSheet()
+    const scope = { kind: 'student', studentId: 's1', studentName: '王小明' } as const
+    const zip = await buildPhotoBackup(await listStudentPhotosWithBlobs('s1'), NOW, scope)
 
-    await exportPhotoBackup(NOW)
     await clearPhotoStores()
     expect(await listAllPhotos()).toEqual([])
-    await importPhotoBackup(shared[0]!, new Set(['s1', 's2']))
+    await importPhotoBackup(zip, new Set(['s1']))
 
     expect(await snapshot()).toEqual(before)
+  })
+
+  it('舊版的全部照片備份仍可匯入（Integration）', async () => {
+    // 逐學生匯出之前的格式：manifest 沒有 scope，一份含多位學生的照片（backupZip 不寫 scope）
+    const zip = await backupZip([photoRecord({ id: 'p1', studentId: 's1' }), photoRecord({ id: 'p2', studentId: 's2' })])
+    const manifest = JSON.parse(strFromU8(unzipSync(new Uint8Array(await zip.arrayBuffer()))['manifest.json']!)) as object
+    expect(manifest).not.toHaveProperty('scope')
+
+    const result = await importPhotoBackup(zip, new Set(['s1', 's2']))
+
+    expect(result).toMatchObject({ ok: true, added: 2 })
+    expect((await getPhoto('p1'))!.studentId).toBe('s1')
+    expect((await getPhoto('p2'))!.studentId).toBe('s2')
   })
 
   it('空間不足以交易中止回報時同樣視為空間不足（Error Handling）：匯入', async () => {

@@ -1,0 +1,44 @@
+.list {
+  list-style: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  /* span 預設 inline，姓名與張數會擠成同一行 */
+  display: flex;
+  flex-direction: column;
+}
+
+.name {
+  font-size: var(--fs-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: var(--lh-normal);
+  margin-bottom: var(--sp-4);
+}

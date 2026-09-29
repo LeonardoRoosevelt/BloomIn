@@ -1,13 +1,15 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadPhotoBackupAt } from './db'
-import { exportPhotoBackup, importPhotoBackup } from './photoBackup'
+import { shareFile } from '../lib/share'
+import { loadPhotoBackupTime, savePhotoBackupTime } from './db'
+import { buildPhotoBackup, importPhotoBackup } from './photoBackup'
 import {
   addPhotoFiles,
   deletePhoto,
   getPhoto,
   listAllPhotos,
   listPhotosByMonth,
+  listStudentPhotosWithBlobs,
   updatePhoto,
 } from './photos'
 import { fakeCodec, fakeImageFile } from '../test/fakeCodec'
@@ -51,6 +53,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** 照片備份區「匯出某位學生」的同一套步驟：讀照片 → 打包 → 分享面板 → 記錄時間。 */
+async function exportStudentBackup(studentId: string, now: Date) {
+  const photos = await listStudentPhotosWithBlobs(studentId)
+  const file = await buildPhotoBackup(photos, now, { kind: 'student', studentId, studentName: '王小明' })
+  const outcome = await shareFile(file, 'BloomIn 照片備份')
+  if (outcome !== 'cancelled') await savePhotoBackupTime(studentId, now.toISOString())
+  return outcome
+}
+
 describe('本機與離線', () => {
   it('照片只存在本機且不需登入（Permission）', async () => {
     // 沒有任何登入、帳號或憑證設定，直接新增與匯出
@@ -60,7 +71,7 @@ describe('本機與離線', () => {
       { recordDate: '2024-03-15', caption: '簽到卡' },
       fakeCodec,
     )
-    const outcome = await exportPhotoBackup(new Date('2026-09-29T10:00:00Z'))
+    const outcome = await exportStudentBackup('s1', new Date('2026-09-29T10:00:00Z'))
 
     expect(added).toMatchObject({ added: 1, unreadable: 0, noSpace: 0 })
     expect(outcome).toBe('shared')
@@ -87,8 +98,8 @@ describe('本機與離線', () => {
     await deletePhoto(second!.id)
     expect((await listAllPhotos()).map((p) => p.id)).toEqual([first!.id])
     // 匯出
-    expect(await exportPhotoBackup(new Date('2026-09-29T10:00:00Z'))).toBe('shared')
-    expect(await loadPhotoBackupAt()).toBe('2026-09-29T10:00:00.000Z')
+    expect(await exportStudentBackup('s1', new Date('2026-09-29T10:00:00Z'))).toBe('shared')
+    expect(await loadPhotoBackupTime('s1')).toBe('2026-09-29T10:00:00.000Z')
     // 清空後匯入同一份
     await clearPhotoStores()
     const result = await importPhotoBackup(shared[0]!, new Set(['s1']))
