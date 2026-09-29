@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from './ui/Button'
-import { IconShare, IconUpload } from './icons'
+import { Sheet } from './ui/Sheet'
+import { IconShare, IconTrash, IconUpload } from './icons'
 import { daysSinceBackup } from '../store/backup'
 import { shareFile } from '../lib/share'
-import { loadPhotoBackupTime, savePhotoBackupTime } from '../store/db'
+import { loadPhotoBackupTime, savePhotoBackupTime, UNASSIGNED_OWNER } from '../store/db'
 import {
   buildPhotoBackup,
   describeExport,
@@ -11,7 +12,12 @@ import {
   importPhotoBackup,
   type PhotoBackupScope,
 } from '../store/photoBackup'
-import { countPhotosByStudent, listStudentPhotosWithBlobs } from '../store/photos'
+import {
+  countPhotosByStudent,
+  deleteUnassignedPhotos,
+  listStudentPhotosWithBlobs,
+  listUnassignedPhotosWithBlobs,
+} from '../store/photos'
 import { useStore } from '../store/useStore'
 // 與資料備份同一種卡片外觀，直接共用樣式
 import s from './BackupPanel.module.css'
@@ -39,21 +45,41 @@ export function PhotoBackupPanel() {
   const [rows, setRows] = useState<OwnerRow[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [confirmingClear, setConfirmingClear] = useState(false)
+
+  // 已封存的學生仍在 students 裡，他的照片不算未歸屬
+  const knownIds = new Set(students.map((st) => st.id))
 
   const reload = useCallback(async () => {
     const counts = await countPhotosByStudent()
+    const known = new Set(students.map((st) => st.id))
     const withPhotos = students.filter((st) => (counts.get(st.id) ?? 0) > 0)
-    setRows(
-      await Promise.all(
-        withPhotos.map(async (st) => ({
-          owner: st.id,
-          label: st.name,
-          count: counts.get(st.id) ?? 0,
-          lastAt: await loadPhotoBackupTime(st.id),
-          scope: { kind: 'student', studentId: st.id, studentName: st.name } as const,
-        })),
-      ),
+    const studentRows: OwnerRow[] = await Promise.all(
+      withPhotos.map(async (st) => ({
+        owner: st.id,
+        label: st.name,
+        count: counts.get(st.id) ?? 0,
+        lastAt: await loadPhotoBackupTime(st.id),
+        scope: { kind: 'student', studentId: st.id, studentName: st.name } as const,
+      })),
     )
+    // 所屬學生不在目前資料中的照片（例如先匯入照片、還沒還原資料備份）：分學生匯出後它們沒有入口，
+    // 所以集中成一列，才備份得到
+    let unassigned = 0
+    for (const [studentId, count] of counts) if (!known.has(studentId)) unassigned += count
+    const unassignedRows: OwnerRow[] =
+      unassigned === 0
+        ? []
+        : [
+            {
+              owner: UNASSIGNED_OWNER,
+              label: '未歸屬的照片',
+              count: unassigned,
+              lastAt: await loadPhotoBackupTime(UNASSIGNED_OWNER),
+              scope: { kind: 'unassigned' },
+            },
+          ]
+    setRows([...studentRows, ...unassignedRows])
   }, [students])
 
   useEffect(() => {
@@ -77,7 +103,10 @@ export function PhotoBackupPanel() {
   function exportRow(row: OwnerRow) {
     void run(async () => {
       const now = new Date()
-      const photos = await listStudentPhotosWithBlobs(row.owner)
+      const photos =
+        row.scope.kind === 'student'
+          ? await listStudentPhotosWithBlobs(row.scope.studentId)
+          : await listUnassignedPhotosWithBlobs(knownIds)
       const file = await buildPhotoBackup(photos, now, row.scope)
       const outcome = await shareFile(file, `BloomIn 照片備份（${row.label}）`)
       // 只有真的送出去才算備份完成；取消了還記時間，會讓人以為照片已經有備份
@@ -87,65 +116,111 @@ export function PhotoBackupPanel() {
     })
   }
 
-  return (
-    <div className={s.card}>
-      {rows !== null && rows.length === 0 && (
-        <p className={p.empty}>還沒有任何照片。在學生的「照片紀錄本」新增照片後，這裡可以逐位學生匯出備份。</p>
-      )}
-      {rows !== null && rows.length > 0 && (
-        <ul className={p.list}>
-          {rows.map((row) => (
-            <li key={row.owner} className={p.row}>
-              <span className={p.body}>
-                <span className={p.name}>{row.label}</span>
-                <span className={p.meta}>
-                  {row.count} 張 · {lastBackupLabel(row.lastAt)}
-                </span>
-              </span>
-              <Button
-                variant="secondary"
-                iconOnly
-                aria-label={`匯出${row.label}的照片備份`}
-                disabled={busy}
-                onClick={() => exportRow(row)}
-              >
-                <IconShare size={18} />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+  function clearUnassigned() {
+    setConfirmingClear(false)
+    void run(async () => {
+      const removed = await deleteUnassignedPhotos(knownIds)
+      await reload()
+      return { kind: 'ok', text: `已清除 ${removed} 張未歸屬的照片。` }
+    })
+  }
 
-      <div className={s.actions}>
-        <Button variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()}>
-          <IconUpload size={18} />
-          {busy ? '處理中…' : '匯入照片備份'}
-        </Button>
+  const unassignedCount = rows?.find((r) => r.scope.kind === 'unassigned')?.count ?? 0
+
+  return (
+    <>
+      <div className={s.card}>
+        {rows !== null && rows.length === 0 && (
+          <p className={p.empty}>還沒有任何照片。在學生的「照片紀錄本」新增照片後，這裡可以逐位學生匯出備份。</p>
+        )}
+        {rows !== null && rows.length > 0 && (
+          <ul className={p.list}>
+            {rows.map((row) => (
+              <li key={row.owner} className={p.row}>
+                <span className={p.body}>
+                  <span className={p.name}>{row.label}</span>
+                  <span className={p.meta}>
+                    {row.count} 張 · {lastBackupLabel(row.lastAt)}
+                  </span>
+                </span>
+                <Button
+                  variant="secondary"
+                  iconOnly
+                  aria-label={row.scope.kind === 'student' ? `匯出${row.label}的照片備份` : '匯出未歸屬的照片備份'}
+                  disabled={busy}
+                  onClick={() => exportRow(row)}
+                >
+                  <IconShare size={18} />
+                </Button>
+                {row.scope.kind === 'unassigned' && (
+                  <Button
+                    variant="ghost"
+                    iconOnly
+                    aria-label="清除未歸屬的照片"
+                    disabled={busy}
+                    onClick={() => setConfirmingClear(true)}
+                  >
+                    <IconTrash size={18} />
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className={s.actions}>
+          <Button variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <IconUpload size={18} />
+            {busy ? '處理中…' : '匯入照片備份'}
+          </Button>
+        </div>
+
+        <input
+          ref={fileRef}
+          className={s.file}
+          type="file"
+          accept="application/zip,.zip"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            // 清掉 value，選同一個檔案兩次才會再次觸發 change
+            e.target.value = ''
+            if (!f) return
+            void run(async () => {
+              const result = await importPhotoBackup(f, new Set(students.map((x) => x.id)))
+              await reload()
+              const partial = result.ok && (result.noSpace > 0 || result.missingFile > 0)
+              return { kind: result.ok && !partial ? 'ok' : 'err', text: describeImport(result) }
+            })
+          }}
+        />
+
+        {message && (
+          <p className={`${s.result} ${message.kind === 'ok' ? s.ok : s.err}`}>{message.text}</p>
+        )}
       </div>
 
-      <input
-        ref={fileRef}
-        className={s.file}
-        type="file"
-        accept="application/zip,.zip"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          // 清掉 value，選同一個檔案兩次才會再次觸發 change
-          e.target.value = ''
-          if (!f) return
-          void run(async () => {
-            const result = await importPhotoBackup(f, new Set(students.map((x) => x.id)))
-            await reload()
-            const partial = result.ok && (result.noSpace > 0 || result.missingFile > 0)
-            return { kind: result.ok && !partial ? 'ok' : 'err', text: describeImport(result) }
-          })
-        }}
-      />
-
-      {message && (
-        <p className={`${s.result} ${message.kind === 'ok' ? s.ok : s.err}`}>{message.text}</p>
-      )}
-    </div>
+      {/* 實體刪除無法復原，一定要二次確認 */}
+      <Sheet
+        open={confirmingClear}
+        onClose={() => setConfirmingClear(false)}
+        title="清除未歸屬的照片？"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmingClear(false)}>
+              取消
+            </Button>
+            <Button variant="danger" onClick={clearUnassigned}>
+              清除照片
+            </Button>
+          </>
+        }
+      >
+        <p className={s.warn}>
+          這 {unassignedCount} 張照片所屬的學生不在目前的資料裡。清除後無法復原，除非有照片備份。
+          若只是還沒還原資料備份，請先還原，照片就會回到學生的紀錄本。
+        </p>
+      </Sheet>
+    </>
   )
 }
 

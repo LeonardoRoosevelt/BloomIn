@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { strFromU8, unzipSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createInitialState, type Student } from '../domain/types'
-import { getDb } from '../store/db'
+import { getDb, PHOTO_BLOBS_STORE, PHOTOS_STORE } from '../store/db'
 import { useStore } from '../store/useStore'
 import { clearPhotoStores, photoRecord, seedPhotos } from '../test/photoFixtures'
 import { PhotoBackupPanel } from './PhotoBackupPanel'
@@ -184,5 +184,69 @@ describe('照片備份區', () => {
     finishShare()
     await screen.findByText(/已送出照片備份/)
     for (const button of screen.getAllByRole('button')) expect((button as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('未歸屬的照片可以單獨匯出（Happy Path）', async () => {
+    setStudents(student('s1', '王小明'))
+    await seedPhotos(photoRecord({ id: 'p1', studentId: 's1' }), photoRecord({ id: 'p9', studentId: 's9' }))
+    const { shared } = stubShareSheet()
+    render(<PhotoBackupPanel />)
+
+    await screen.findByText('未歸屬的照片')
+    expect(rowOf('未歸屬的照片').textContent).toContain('1 張')
+    fireEvent.click(screen.getByRole('button', { name: '匯出未歸屬的照片備份' }))
+    await screen.findByText(/已送出照片備份/)
+
+    const manifest = JSON.parse(strFromU8((await unzipFile(shared[0]!))['manifest.json']!)) as {
+      exportedAt: string
+      scope: { kind: string }
+      photos: { id: string }[]
+    }
+    expect(manifest.scope).toEqual({ kind: 'unassigned' })
+    expect(manifest.photos.map((x) => x.id)).toEqual(['p9'])
+    expect(shared[0]!.name.startsWith('bloomin-照片備份-未歸屬-')).toBe(true)
+    expect(await kvGet('photoBackupAt:unassigned')).toBe(manifest.exportedAt)
+  })
+
+  it('已封存學生的照片不算未歸屬（Edge Case）', async () => {
+    setStudents(student('s1', '王小明', true))
+    await seedPhotos(photoRecord({ id: 'p1', studentId: 's1' }))
+
+    render(<PhotoBackupPanel />)
+
+    await screen.findByText('王小明')
+    expect(rowOf('王小明').textContent).toContain('1 張')
+    expect(screen.queryByText('未歸屬的照片')).toBeNull()
+  })
+
+  it('清除未歸屬的照片需二次確認（State）', async () => {
+    setStudents(student('s1', '王小明'))
+    await seedPhotos(photoRecord({ id: 'p1', studentId: 's1' }), photoRecord({ id: 'p9', studentId: 's9' }))
+    render(<PhotoBackupPanel />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '清除未歸屬的照片' }))
+    expect(await screen.findByText(/無法復原/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '清除照片' }))
+
+    await waitFor(() => expect(screen.queryByText('未歸屬的照片')).toBeNull())
+    const db = await getDb()
+    expect(await db.get(PHOTOS_STORE, 'p9')).toBeUndefined()
+    expect(await db.get(PHOTO_BLOBS_STORE, 'p9')).toBeUndefined()
+    expect(await db.get(PHOTOS_STORE, 'p1')).toBeDefined()
+    expect(await db.get(PHOTO_BLOBS_STORE, 'p1')).toBeDefined()
+  })
+
+  it('取消清除未歸屬的照片時照片保留（State）', async () => {
+    setStudents(student('s1', '王小明'))
+    await seedPhotos(photoRecord({ id: 'p9', studentId: 's9' }))
+    render(<PhotoBackupPanel />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '清除未歸屬的照片' }))
+    await screen.findByText(/無法復原/)
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: '清除照片' })).toBeNull())
+    expect(await (await getDb()).get(PHOTOS_STORE, 'p9')).toBeDefined()
+    expect(rowOf('未歸屬的照片').textContent).toContain('1 張')
   })
 })

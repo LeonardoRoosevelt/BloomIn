@@ -234,6 +234,24 @@ Feature: 學生照片紀錄本
       And zip 含 photos/p1.jpg 與 photos/p2.jpg，不含 "p3" 的圖檔
       And kv 的 photoBackupAt:s1 更新為匯出時間，photoBackupAt:s2 不變
 
+    # coverage: Happy Path / 照片備份區的未歸屬照片
+    @happy-path
+    Scenario: 未歸屬的照片可以單獨匯出（Happy Path）
+      Given students 中有 "王小明"（s1），沒有 s9
+      And photos 中 s1 有 "p1"，s9 有 "p9"
+      When 老師在照片備份區匯出「未歸屬的照片」
+      Then 照片備份區有一列 "未歸屬的照片 1 張"
+      And 產生的 zip 的 scope 為未歸屬，只列出 "p9"，檔名以 "bloomin-照片備份-未歸屬-" 開頭
+      And kv 的 photoBackupAt:unassigned 更新為匯出時間
+
+    # coverage: Happy Path / 照片備份區的未歸屬照片
+    @edge-case
+    Scenario: 已封存學生的照片不算未歸屬（Edge Case）
+      Given students 中 "王小明"（s1）已封存，且 s1 有照片
+      When 老師開啟設定頁的照片備份區
+      Then "王小明" 照常列出
+      And 不顯示「未歸屬的照片」這一列
+
     # coverage: Happy Path / 逐位學生匯出照片備份
     @edge-case
     Scenario: 沒有任何照片時照片備份區顯示空狀態（Edge Case）
@@ -324,6 +342,22 @@ Feature: 學生照片紀錄本
       And 回報這次沒有備份照片
 
   Rule: 照片可刪除，但必須二次確認
+
+    # coverage: State Transitions / 清除未歸屬的照片
+    @state
+    Scenario: 清除未歸屬的照片需二次確認（State）
+      Given photos 中 s1 有 "p1"，不在學生資料中的 s9 有 "p9"
+      When 老師在照片備份區按「清除」未歸屬的照片並在確認時同意
+      Then photos 與 photoBlobs 中都不存在 "p9"
+      And "p1" 仍在
+      And 不再顯示「未歸屬的照片」這一列
+
+    # coverage: State Transitions / 清除未歸屬的照片
+    @state
+    Scenario: 取消清除未歸屬的照片時照片保留（State）
+      Given photos 中不在學生資料中的 s9 有 "p9"
+      When 老師在照片備份區按「清除」未歸屬的照片但在確認時取消
+      Then photos 中仍存在 "p9"
 
     # coverage: State Transitions / 刪除需二次確認
     @state

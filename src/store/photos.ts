@@ -46,6 +46,38 @@ export async function listStudentPhotosWithBlobs(studentId: string): Promise<Pho
   return photos
 }
 
+/**
+ * 所屬學生不在目前資料中的照片（含原圖），照片備份區「未歸屬的照片」用。
+ * 已封存的學生仍在 students 裡，他的照片不算未歸屬。
+ */
+export async function listUnassignedPhotosWithBlobs(knownStudentIds: ReadonlySet<string>): Promise<Photo[]> {
+  const db = await getDb()
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readonly')
+  const records = ((await tx.objectStore(PHOTOS_STORE).getAll()) as PhotoSummary[]).filter(
+    (r) => !knownStudentIds.has(r.studentId),
+  )
+  const photos = await withBlobs(tx.objectStore(PHOTO_BLOBS_STORE), records)
+  await tx.done
+  return photos
+}
+
+/**
+ * 清除所有未歸屬的照片（中繼資料與原圖同一個交易），回傳清除的張數。
+ * 無法復原（除非有照片備份），畫面上一定要先二次確認。
+ */
+export async function deleteUnassignedPhotos(knownStudentIds: ReadonlySet<string>): Promise<number> {
+  const db = await getDb()
+  const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readwrite')
+  const records = (await tx.objectStore(PHOTOS_STORE).getAll()) as PhotoSummary[]
+  const doomed = records.filter((r) => !knownStudentIds.has(r.studentId))
+  for (const r of doomed) {
+    await tx.objectStore(PHOTOS_STORE).delete(r.id)
+    await tx.objectStore(PHOTO_BLOBS_STORE).delete(r.id)
+  }
+  await tx.done
+  return doomed.length
+}
+
 /** 替中繼資料補上原圖；原圖缺失的（理論上不會發生，兩邊同一交易寫入）不列入。 */
 async function withBlobs(
   blobStore: { get(key: string): Promise<unknown> },

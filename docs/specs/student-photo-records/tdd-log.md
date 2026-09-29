@@ -991,3 +991,25 @@ build 成功。
       Tests  140 passed (140)
 ```
 gherkin／coverage／tdd 門禁 PASS；build 成功。
+
+## 單元 3b — 「未歸屬的照片」列（匯出與清除）
+規格：`coverage.md` Happy Path 新增「照片備份區的未歸屬照片」（定義：studentId 不在目前 students 中；已封存學生不算），State 新增「清除未歸屬的照片」。`.feature` 新增 4 個 Scenario：
+- 未歸屬的照片可以單獨匯出（Happy Path）
+- 已封存學生的照片不算未歸屬（Edge Case）
+- 清除未歸屬的照片需二次確認（State）
+- 取消清除未歸屬的照片時照片保留（State）
+
+gherkin／coverage 門禁 PASS。
+
+| Slice | Red | Green |
+|---|---|---|
+| 3b-1 未歸屬的照片可以單獨匯出（Happy Path） | `Unable to find an element with the text: 未歸屬的照片` | `photos.ts` `listUnassignedPhotosWithBlobs(knownIds)`；面板把 studentId 不在 students 中的張數合成「未歸屬的照片 N 張」一列（0 張不顯示），匯出以 `scope: { kind: 'unassigned' }` 打包、kv `photoBackupAt:unassigned` |
+| 3b-2 已封存學生的照片不算未歸屬（Edge Case） | 第一次就綠：3b-1 以 students 全體（含已封存）判斷 | 突變（把已封存學生排除在外）→ `Unable to find an element with the text: 王小明` |
+| 3b-3 清除未歸屬的照片需二次確認（State） | `Unable to find role="button" and name "清除未歸屬的照片"` | `photos.ts` `deleteUnassignedPhotos(knownIds)`（photos＋photoBlobs 同一交易）；面板「清除」→ Sheet 說明無法復原並提示先還原資料備份 → 「清除照片」 |
+| 3b-4 取消清除未歸屬的照片時照片保留（State） | 第一次就綠：3b-3 的「取消」只關閉 Sheet | 突變（按「清除」就直接刪）→ `expected undefined to be defined` |
+
+```
+ Test Files  17 passed (17)
+      Tests  144 passed (144)
+```
+gherkin／coverage／tdd 門禁 PASS；build 成功。
