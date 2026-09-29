@@ -111,6 +111,12 @@
 - 情境：IndexedDB 由 v1 升級到 v2
   - 預期行為：既有 `kv` store 與 `state` 資料完整保留，僅新增 `photos` store 與 `studentId` 索引。
   - 資料需求：`DB_VERSION` 1 → 2；`upgrade()` 依 `oldVersion` 增量建立。
+- 情境：升級時還有舊版 App 的分頁／視窗開著（舊版沒有處理 versionchange，連線不會自己關）
+  - 預期行為：升級被擋住時不能無限等待而停在白畫面；顯示可理解的提示（「請關閉其他開著的 BloomIn 分頁」）。這不是讀取失敗，不能進入錯誤狀態、也不能讓人開始輸入；舊連線一關閉，升級自動完成、畫面自動進入 App，`kv` 的資料完整保留。
+  - 資料需求：`openDB` 的 `blocked` 事件回報給載入流程。
+- 情境：本版開著時，另一個分頁以更新的資料庫版本開啟（日後 v2 → v3）
+  - 預期行為：本分頁主動關閉連線讓升級進行，不重演「舊分頁擋住新版」的問題。
+  - 資料需求：`openDB` 的 `blocking` 事件中關閉連線。
 
 ### 6. Integration Points
 - 情境：`shareFile()` 匯出照片備份 zip

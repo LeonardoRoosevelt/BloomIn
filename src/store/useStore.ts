@@ -10,13 +10,15 @@ import {
   type Student,
 } from '../domain/types'
 import { newId } from '../lib/id'
-import { loadRollback, loadState, saveRollback, saveState } from './db'
+import { loadRollback, loadState, onUpgradeBlocked, saveRollback, saveState } from './db'
 
 interface StoreState {
   data: AppState
   hydrated: boolean
   /** 載入失敗的原因；非 null 時畫面必須顯示錯誤而非空白 */
   hydrateError: string | null
+  /** 資料庫升級正被其他開著的舊版分頁擋住；舊連線關閉後會自動繼續載入 */
+  upgradeBlocked: boolean
 
   hydrate: () => Promise<void>
   /**
@@ -54,6 +56,7 @@ export const useStore = create<StoreState>((set) => ({
   data: createInitialState(),
   hydrated: false,
   hydrateError: null,
+  upgradeBlocked: false,
 
   /**
    * 載入失敗時不得靜默 —— 之前這裡的例外會讓 App 停在完全空白的畫面，
@@ -61,11 +64,14 @@ export const useStore = create<StoreState>((set) => ({
    * 否則新資料會覆蓋掉可能還救得回來的舊資料。
    */
   hydrate: async () => {
+    const stopListening = onUpgradeBlocked(() => set({ upgradeBlocked: true }))
     try {
       const stored = await loadState<AppState>()
-      set({ data: stored ?? createInitialState(), hydrated: true, hydrateError: null })
+      set({ data: stored ?? createInitialState(), hydrated: true, hydrateError: null, upgradeBlocked: false })
     } catch (err) {
-      set({ hydrated: true, hydrateError: err instanceof Error ? err.message : String(err) })
+      set({ hydrated: true, hydrateError: err instanceof Error ? err.message : String(err), upgradeBlocked: false })
+    } finally {
+      stopListening()
     }
   },
 

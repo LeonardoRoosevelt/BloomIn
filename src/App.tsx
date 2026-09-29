@@ -19,13 +19,15 @@ export function App() {
   const hydrated = useStore((st) => st.hydrated)
   const hydrateError = useStore((st) => st.hydrateError)
   const hydrate = useStore((st) => st.hydrate)
+  const upgradeBlocked = useStore((st) => st.upgradeBlocked)
 
   useEffect(() => {
     void hydrate()
   }, [hydrate])
 
-  // 資料尚未從 IndexedDB 載入前不渲染畫面，避免先閃出空狀態再跳成有資料
-  if (!hydrated) return null
+  // 資料尚未從 IndexedDB 載入前不渲染畫面，避免先閃出空狀態再跳成有資料。
+  // 唯一例外是升級被舊分頁擋住：這可能要等很久，必須說明原因，否則就是一片白畫面。
+  if (!hydrated) return upgradeBlocked ? <UpgradeBlocked /> : null
 
   // 讀不到資料時停在錯誤畫面，不讓使用者開始輸入 ——
   // 在載入失敗的狀態下新增資料，會把可能還救得回來的舊資料覆蓋掉。
@@ -42,6 +44,18 @@ export function App() {
       {route.name === 'billing' && <Billing />}
       {route.name === 'settings' && <Settings />}
     </AppShell>
+  )
+}
+
+function UpgradeBlocked() {
+  return (
+    <div style={{ padding: 'var(--sp-5)', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
+      <EmptyState
+        art={<IconAlert size={72} />}
+        title="正在更新本機資料格式"
+        description="請關閉其他開著的 BloomIn 分頁或視窗（在 iPhone 上可從多工畫面把舊的 BloomIn 滑掉）。關閉後這裡會自動繼續，資料不會遺失。"
+      />
+    </div>
   )
 }
 

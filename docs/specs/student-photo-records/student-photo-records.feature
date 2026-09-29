@@ -263,6 +263,23 @@ Feature: 學生照片紀錄本
     Then kv 中的 state 完整保留
     And photos 已建立且可依 studentId 查詢
 
+  # coverage: State Transitions / 升級時舊版分頁仍開著
+  @state
+  Scenario: 舊版分頁未關閉時升級不會卡住（State）
+    Given 資料庫版本為 1，kv 中存有 state
+    And 另一個舊版分頁仍開著版本 1 的連線
+    When App 以版本 2 開啟資料庫
+    Then 顯示「請關閉其他開著的 BloomIn 分頁」的提示，而不是空白畫面
+    When 舊版分頁關閉連線
+    Then 升級完成並進入 App，kv 中的 state 完整保留
+
+  # coverage: State Transitions / 更新版本開啟時讓出連線
+  @state
+  Scenario: 本分頁不會擋住較新版本的升級（State）
+    Given App 以版本 2 開著資料庫
+    When 另一個分頁以版本 3 開啟資料庫
+    Then 版本 3 的開啟不會被本分頁擋住
+
   Rule: 與瀏覽器能力的串接失敗時要可預期
 
     # coverage: Integration Points / shareFile 匯出

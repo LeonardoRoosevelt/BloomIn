@@ -34,4 +34,27 @@ describe('IndexedDB 結構', () => {
     const ofS1 = await db.getAllFromIndex('photos', 'studentId', 's1')
     expect(ofS1.map((p: { id: string }) => p.id)).toEqual(['p1'])
   })
+
+  it('本分頁不會擋住較新版本的升級（State）', async () => {
+    // Given App 以版本 2 開著資料庫
+    const current = await getDb()
+    expect(current.version).toBe(2)
+
+    // When 另一個分頁以版本 3 開啟資料庫
+    let blocked = false
+    const newer = openDB('bloomin', 3, {
+      blocked() {
+        blocked = true
+      },
+    })
+    const outcome = await Promise.race([
+      newer.then(() => 'opened'),
+      new Promise((resolve) => setTimeout(() => resolve('HUNG'), 500)),
+    ])
+
+    // Then 版本 3 的開啟不會被本分頁擋住
+    expect(outcome).toBe('opened')
+    expect(blocked).toBe(false)
+    ;(await newer).close()
+  })
 })

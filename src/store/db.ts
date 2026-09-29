@@ -19,6 +19,18 @@ export const PHOTOS_STORE = 'photos'
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
+/*
+ * 升級被擋住：另一個分頁／視窗還開著舊版連線（舊版沒有處理 versionchange，不會自己關）。
+ * openDB 會一直等到那條連線關閉，這段期間畫面必須說明原因，否則看起來就是白畫面。
+ * 等待本身是對的 —— 舊連線一關就會自動完成，所以只「通知」，不把它當成錯誤。
+ */
+const blockedListeners = new Set<() => void>()
+
+export function onUpgradeBlocked(listener: () => void): () => void {
+  blockedListeners.add(listener)
+  return () => blockedListeners.delete(listener)
+}
+
 export function getDb(): Promise<IDBPDatabase> {
   dbPromise ??= openDB(DB_NAME, DB_VERSION, {
     // 依 oldVersion 增量升級：舊版使用者升級時只補缺的部分，kv 裡的資料原封不動
@@ -28,6 +40,16 @@ export function getDb(): Promise<IDBPDatabase> {
         const photos = db.createObjectStore(PHOTOS_STORE, { keyPath: 'id' })
         photos.createIndex('studentId', 'studentId')
       }
+    },
+    blocked() {
+      for (const listener of blockedListeners) listener()
+    },
+    // 反過來，日後有更新版本要升級時，本分頁要主動讓出連線，不重演上面的卡住。
+    // 必須在 versionchange 事件當下同步關閉，否則對方仍會收到 blocked。
+    // 關閉後本分頁已是舊版，之後的讀寫會失敗，重新開啟 App 即可。
+    blocking(_currentVersion, _blockedVersion, event) {
+      ;(event.target as IDBDatabase).close()
+      dbPromise = null
     },
   })
   return dbPromise

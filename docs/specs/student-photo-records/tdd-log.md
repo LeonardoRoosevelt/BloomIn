@@ -580,3 +580,44 @@ $ pnpm test
  Test Files  10 passed (10)
       Tests  116 passed (116)
 ```
+
+## Fix B2 — DB 升級被開著的舊連線擋住（新 Scenario ×2）
+規格：`coverage.md` State Transitions 新增兩個條目：「升級時還有舊版分頁開著」與「更新版本開啟時本分頁讓出連線」。`.feature` 新增兩個 Scenario：「舊版分頁未關閉時升級不會卡住（State）」與「本分頁不會擋住較新版本的升級（State）」。gherkin／coverage 門禁 PASS。
+
+### B2-1 舊版分頁未關閉時升級不會卡住（State）
+#### Red
+測試：`src/App.test.tsx::資料庫升級 > 舊版分頁未關閉時升級不會卡住（State）`（jsdom＋fake-indexeddb）。先開一條 v1 連線並寫入 state，保持不關閉，再 render 真正的 `<App />`。
+```
+   × 資料庫升級 > 舊版分頁未關閉時升級不會卡住（State） 1013ms
+     → Unable to find an element with the text: /請關閉其他開著的 BloomIn 分頁/. …
+<body>
+  <div />
+</body>
+```
+失敗類型：功能未實作。openDB 無限等待，`hydrated` 永遠是 false，App 回傳 null，畫面全白。
+#### Green
+變更：
+- `src/store/db.ts`：`openDB` 加 `blocked()`，透過 `onUpgradeBlocked(listener)` 通知訂閱者。
+- `src/store/useStore.ts`：新增 `upgradeBlocked`。hydrate 期間訂閱通知，收到就設為 true，載入完成（或失敗）時歸零並取消訂閱。
+- `src/App.tsx`：未載入完成且 `upgradeBlocked` 時顯示 `UpgradeBlocked` 提示（「請關閉其他開著的 BloomIn 分頁或視窗…關閉後這裡會自動繼續」）。
+
+設計判斷：被擋住只是「通知」，不寫入 `hydrateError`。等待本身是正確的，舊連線一關，同一個 openDB promise 就會完成，App 自動進入；也不必重試或重新整理。測試驗證關閉舊連線後出現主導覽、`hydrateError` 為 null、state 與 v1 寫入的完全相同。
+```
+ Test Files  11 passed (11)
+      Tests  117 passed (117)
+```
+
+### B2-2 本分頁不會擋住較新版本的升級（State）
+#### Red
+測試：`src/store/db.test.ts::IndexedDB 結構 > 本分頁不會擋住較新版本的升級（State）`。本模組以 v2 開著時，另開 v3，並以 500ms 計時器競速。
+```
+   × IndexedDB 結構 > 本分頁不會擋住較新版本的升級（State） 504ms
+     → expected 'HUNG' to be 'opened' // Object.is equality
+```
+失敗類型：功能未實作（沒有處理 versionchange）
+#### Green
+變更：`src/store/db.ts` 加 `blocking(_, _, event)`，在 versionchange 當下同步 `event.target.close()` 並把 `dbPromise` 設為 null。若非同步關閉（例如經 `dbPromise.then`），對方仍會先收到 blocked，所以測試同時斷言 `blocked === false`。
+```
+ Test Files  11 passed (11)
+      Tests  118 passed (118)
+```
