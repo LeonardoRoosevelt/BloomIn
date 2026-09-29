@@ -1060,3 +1060,45 @@ exit=1
 exit=0
 ```
 build 成功。
+
+---
+
+# 修正輪 5（verifier 推翻「同一交易保證整張」）
+
+## Fix 5-1 — 寫入或刪除途中出錯時兩邊都不留下變更
+規格：`coverage.md` Error Handling 新增「同一交易中的某個請求出錯」條目，並寫明同步拋錯不會讓交易自動中止。`.feature` 新增 Scenario Outline「寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）」，4 個 Examples：
+- 新增照片時原圖 DataCloneError
+- 新增照片時原圖 QuotaExceededError
+- 刪除時原圖 UnknownError
+- 清除未歸屬照片時第二張的刪除出錯
+
+gherkin／coverage 門禁 PASS。
+### Red
+測試：`src/store/photos.test.ts::同一交易中的請求出錯 > 寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）：<Example>`。spy 只讓指定 store 的第 N 次 put／delete 同步拋錯，比對兩個 store 的原始內容，並收集未處理的 rejection。
+```
+   × …：新增一張照片、原圖 DataCloneError → expected { photos: [ …(4) ], …(1) } to deeply equal { …(2) }
+   × …：新增一張照片、原圖 QuotaExceededError → expected { photos: [ …(4) ], …(1) } to deeply equal { …(2) }
+   × …：刪除 p1、原圖 UnknownError → expected { photos: [ 'p8:s9', 'p9:s9' ], …(1) } to deeply equal { …(2) }
+   × …：清除未歸屬的照片、第二張的刪除 UnknownError → expected { photos: [ 'p1:s1', 'p9:s9' ], …(1) } to deeply equal { …(2) }
+      Tests  4 failed | 14 passed (18)     exit=1
+```
+失敗類型：功能未實作。catch 只等 `tx.done`，沒有 abort，同步拋錯前已送出的請求照樣 commit：
+- 新增：photos 多了半筆，但沒有原圖
+- 刪除：photos 已刪、原圖還在
+- 清除：p8 已清、p9 還在
+### Green
+變更：`src/store/photos.ts` 新增 `allOrNothing(tx, work)`，`putPhoto`、`deletePhoto`、`deleteUnassignedPhotos` 都改用它。
+- 任一請求失敗時，若交易尚未結束且沒有 `error`，就主動 `abort()`，撤銷所有已送出的請求。
+- 已送出的請求全部接住。
+- 等交易結束後，`transaction.error` 是空間不足就拋它，否則拋原錯誤。
+```
+ Test Files  18 passed (18)
+      Tests  149 passed (149)      exit=0
+```
+突變檢查（各自跑完即還原）：
+- 拿掉 `tx.abort()` → 4 個新測試全部失敗。
+- 拿掉「仍在進行中才 abort」的判斷 → 兩個「空間不足以交易中止回報」測試丟出 `InvalidStateError`（交易已被瀏覽器中止，重複 abort），並出現 3 個未處理錯誤。
+
+所以兩個判斷都有測試守護。
+
+連帶修正：ADR 0001 決策 6 改寫為與實際行為一致。說明同一交易本身不保證整張，分別寫出非同步失敗（瀏覽器自行中止）與同步拋錯（必須主動中止）兩條路徑；檢查清單與測試對照表同步更新。build 成功。

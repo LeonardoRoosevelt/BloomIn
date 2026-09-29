@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDb, PHOTO_BLOBS_STORE, PHOTOS_STORE } from './db'
 import {
   addPhotoFiles,
+  deletePhoto,
+  deleteUnassignedPhotos,
   describeAddResult,
   getPhoto,
   listAllPhotos,
@@ -258,5 +260,95 @@ describe('與資料備份互不影響', () => {
     // 或執行復原匯入
     expect(await useStore.getState().rollbackImport()).toBe(true)
     expect(await getPhoto('p1')).toBeDefined()
+  })
+})
+
+describe('同一交易中的請求出錯', () => {
+  /** 兩個 store 的原始內容（照片 id 與學生、原圖 key），用來比對操作前後是否完全相同。 */
+  async function rawStores() {
+    const db = await getDb()
+    const photos = ((await db.getAll(PHOTOS_STORE)) as { id: string; studentId: string }[])
+      .map((p) => `${p.id}:${p.studentId}`)
+      .sort()
+    const blobs = ((await db.getAllKeys(PHOTO_BLOBS_STORE)) as string[]).sort()
+    return { photos, blobs }
+  }
+
+  /** 讓某個 store 的第 nth 次 put／delete 同步拋出指定錯誤（瀏覽器邊界的模擬）。 */
+  function failOn(method: 'put' | 'delete', storeName: string, errorName: string, nth: number) {
+    const real = IDBObjectStore.prototype[method] as (...args: unknown[]) => IDBRequest
+    let calls = 0
+    vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(function (this: IDBObjectStore, ...args: unknown[]) {
+      if (this.name === storeName && ++calls === nth) throw new DOMException(`${errorName} in ${storeName}`, errorName)
+      return real.apply(this, args)
+    } as never)
+  }
+
+  let unhandled: unknown[]
+  const onUnhandled = (reason: unknown) => unhandled.push(reason)
+
+  beforeEach(async () => {
+    unhandled = []
+    process.on('unhandledRejection', onUnhandled)
+    await seedPhotos(
+      photoRecord({ id: 'p1', studentId: 's1' }),
+      photoRecord({ id: 'p8', studentId: 's9' }),
+      photoRecord({ id: 'p9', studentId: 's9' }),
+    )
+  })
+
+  afterEach(() => {
+    process.off('unhandledRejection', onUnhandled)
+  })
+
+  /** 等一下讓遲到的 rejection 浮現，再檢查沒有未處理的錯誤。 */
+  async function expectNoUnhandled() {
+    await new Promise((r) => setTimeout(r, 20))
+    expect(unhandled).toEqual([])
+  }
+
+  it('寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）：新增一張照片、原圖 DataCloneError', async () => {
+    const before = await rawStores()
+    failOn('put', PHOTO_BLOBS_STORE, 'DataCloneError', 1)
+
+    const attempt = addPhotoFiles('s1', [fakeImageFile(1200, 800)], { recordDate: '2024-03-15', caption: '' }, fakeCodec)
+
+    await expect(attempt).rejects.toMatchObject({ name: 'DataCloneError' })
+    vi.restoreAllMocks()
+    expect(await rawStores()).toEqual(before)
+    await expectNoUnhandled()
+  })
+
+  it('寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）：新增一張照片、原圖 QuotaExceededError', async () => {
+    const before = await rawStores()
+    failOn('put', PHOTO_BLOBS_STORE, 'QuotaExceededError', 1)
+
+    const result = await addPhotoFiles('s1', [fakeImageFile(1200, 800)], { recordDate: '2024-03-15', caption: '' }, fakeCodec)
+
+    expect(describeAddResult(result)).toContain('裝置儲存空間不足')
+    vi.restoreAllMocks()
+    expect(await rawStores()).toEqual(before)
+    await expectNoUnhandled()
+  })
+
+  it('寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）：刪除 p1、原圖 UnknownError', async () => {
+    const before = await rawStores()
+    failOn('delete', PHOTO_BLOBS_STORE, 'UnknownError', 1)
+
+    await expect(deletePhoto('p1')).rejects.toMatchObject({ name: 'UnknownError' })
+    vi.restoreAllMocks()
+    expect(await rawStores()).toEqual(before)
+    await expectNoUnhandled()
+  })
+
+  it('寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）：清除未歸屬的照片、第二張的刪除 UnknownError', async () => {
+    const before = await rawStores()
+    // 刪除順序：p8 的中繼資料、p8 的原圖、p9 的中繼資料（第二次刪 photos 時出錯）
+    failOn('delete', PHOTOS_STORE, 'UnknownError', 2)
+
+    await expect(deleteUnassignedPhotos(new Set(['s1']))).rejects.toMatchObject({ name: 'UnknownError' })
+    vi.restoreAllMocks()
+    expect(await rawStores()).toEqual(before)
+    await expectNoUnhandled()
   })
 })

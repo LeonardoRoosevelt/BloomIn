@@ -1,6 +1,7 @@
 import { preparePhoto, type ImageCodec } from '../domain/photoImage'
 import { monthKey } from '../lib/date'
 import { newId } from '../lib/id'
+import type { IDBPTransaction } from 'idb'
 import { getDb, PHOTO_BLOBS_STORE, PHOTOS_STORE } from './db'
 
 /**
@@ -68,14 +69,17 @@ export async function listUnassignedPhotosWithBlobs(knownStudentIds: ReadonlySet
 export async function deleteUnassignedPhotos(knownStudentIds: ReadonlySet<string>): Promise<number> {
   const db = await getDb()
   const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readwrite')
-  const records = (await tx.objectStore(PHOTOS_STORE).getAll()) as PhotoSummary[]
-  const doomed = records.filter((r) => !knownStudentIds.has(r.studentId))
-  for (const r of doomed) {
-    await tx.objectStore(PHOTOS_STORE).delete(r.id)
-    await tx.objectStore(PHOTO_BLOBS_STORE).delete(r.id)
-  }
-  await tx.done
-  return doomed.length
+  let removed = 0
+  // 全有或全無：中途任一張刪不掉，就一張都不刪
+  await allOrNothing(tx, async (issue) => {
+    const records = (await tx.objectStore(PHOTOS_STORE).getAll()) as PhotoSummary[]
+    for (const r of records.filter((x) => !knownStudentIds.has(x.studentId))) {
+      issue(tx.objectStore(PHOTOS_STORE).delete(r.id))
+      issue(tx.objectStore(PHOTO_BLOBS_STORE).delete(r.id))
+      removed++
+    }
+  })
+  return removed
 }
 
 /** 替中繼資料補上原圖；原圖缺失的（理論上不會發生，兩邊同一交易寫入）不列入。 */
@@ -169,7 +173,10 @@ export async function updatePhoto(
 export async function deletePhoto(id: string): Promise<void> {
   const db = await getDb()
   const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readwrite')
-  await Promise.all([tx.objectStore(PHOTOS_STORE).delete(id), tx.objectStore(PHOTO_BLOBS_STORE).delete(id), tx.done])
+  await allOrNothing(tx, async (issue) => {
+    issue(tx.objectStore(PHOTOS_STORE).delete(id))
+    issue(tx.objectStore(PHOTO_BLOBS_STORE).delete(id))
+  })
 }
 
 /**
@@ -179,19 +186,48 @@ export async function deletePhoto(id: string): Promise<void> {
  */
 export async function putPhoto(photo: Photo): Promise<void> {
   const db = await getDb()
-  // 中繼資料與原圖在同一個交易：空間不足時兩邊都不寫入，不會留下半張
+  // 中繼資料與原圖在同一個交易：任一邊寫不進去，兩邊都不寫入，不會留下半張
   const tx = db.transaction([PHOTOS_STORE, PHOTO_BLOBS_STORE], 'readwrite')
   const { blob, ...record } = photo
+  await allOrNothing(tx, async (issue) => {
+    issue(tx.objectStore(PHOTOS_STORE).put(record))
+    issue(tx.objectStore(PHOTO_BLOBS_STORE).put(blob, photo.id))
+  })
+}
+
+/**
+ * 在一個 readwrite 交易裡送出多個請求，全部成功才算數。
+ *
+ * IndexedDB 只有在交易中止時才會撤銷已送出的請求，而請求「同步拋錯」（例如 DataCloneError、
+ * 同步的 QuotaExceededError）並不會讓交易自動中止 —— 若只是等交易結束，前面已送出的請求照樣 commit，
+ * 留下半張照片或孤立的原圖。所以任何失敗都主動中止仍在進行中的交易；非同步失敗時瀏覽器通常已自行中止，
+ * 這時交易已有 error 或已結束，就不再呼叫 abort()（重複呼叫會丟 InvalidStateError）。
+ *
+ * 錯誤回報：交易本身的 error 是空間不足時拋它（請求端可能只看到籠統的 AbortError），否則拋原錯誤。
+ */
+async function allOrNothing(
+  tx: IDBPTransaction<unknown, string[], 'readwrite'>,
+  work: (issue: (request: Promise<unknown>) => void) => Promise<void>,
+): Promise<void> {
   const requests: Promise<unknown>[] = []
+  let finished = false
+  const done = tx.done.then(
+    () => {
+      finished = true
+    },
+    (err: unknown) => {
+      finished = true
+      throw err
+    },
+  )
   try {
-    requests.push(tx.objectStore(PHOTOS_STORE).put(record))
-    requests.push(tx.objectStore(PHOTO_BLOBS_STORE).put(blob, photo.id))
-    await Promise.all([...requests, tx.done])
+    await work((request) => requests.push(request))
+    await Promise.all([...requests, done])
   } catch (err) {
-    // 交易中止後，已送出的每個請求也都會 reject；若第二個請求同步拋錯，前一個請求的
-    // promise 根本沒進到 Promise.all，會變成沒人處理的錯誤。錯誤由下方統一處理，這裡全部接住
+    // 已送出的請求在交易中止後都會 reject；錯誤在下面統一回報，這裡全部接住，免得變成沒人處理的錯誤
     for (const request of requests) request.catch(() => undefined)
-    await tx.done.catch(() => undefined)
+    if (!finished && tx.error === null) tx.abort()
+    await done.catch(() => undefined)
     if (isQuotaError(tx.error)) throw tx.error
     throw err
   }

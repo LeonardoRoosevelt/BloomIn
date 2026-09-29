@@ -142,6 +142,23 @@ Feature: 學生照片紀錄本
       Then 回報「裝置儲存空間不足」並停止
       And photos 中仍只有 "p1"
 
+    # coverage: Error Handling / 同一交易中的請求出錯
+    @error
+    Scenario Outline: 寫入或刪除途中出錯時兩邊都不留下變更（Error Handling）
+      Given photos 中 s1 有 "p1"，不在學生資料中的 s9 有 "p8"、"p9"
+      And 瀏覽器在 <操作> 時，<出錯的請求> 同步拋出 <錯誤>
+      When 老師執行 <操作>
+      Then photos 與 photoBlobs 都與操作前完全相同
+      And <回報>
+      And 沒有未處理的錯誤
+
+      Examples:
+        | 操作                   | 出錯的請求           | 錯誤                | 回報                         |
+        | 新增一張照片           | 寫入 photoBlobs 的原圖 | DataCloneError      | 錯誤照常呈現                 |
+        | 新增一張照片           | 寫入 photoBlobs 的原圖 | QuotaExceededError  | 回報「裝置儲存空間不足」     |
+        | 刪除 "p1"              | 刪除 photoBlobs 的原圖 | UnknownError        | 錯誤照常呈現                 |
+        | 清除未歸屬的照片       | 第二張的刪除         | UnknownError        | 錯誤照常呈現                 |
+
     # coverage: Error Handling / 其他原因的交易中止
     @error
     Scenario: 非空間不足的交易中止不會被誤報為空間不足（Error Handling）

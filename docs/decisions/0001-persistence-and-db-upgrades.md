@@ -29,7 +29,11 @@ BloomIn 是單機離線 PWA，所有資料只存在這台裝置的 IndexedDB（�
    - `flushPersist` 本身不拋錯，因為呼叫端多是計時器或頁面事件，拋出只會變成沒人處理的錯誤。
 5. **還原類操作寫入失敗要 reject。** `importState`／`rollbackImport` 在存檔後若仍有 `persistError` 就 reject，畫面顯示「還原的資料沒有存進裝置」，不顯示成功訊息。
 6. **照片與 state 分 store；JSON 資料備份不含照片。**
-   - 領域資料是 kv 的單一 `state` JSON。照片中繼資料與縮圖在 `photos`，原圖在 `photoBlobs`（key 同照片 id）；兩者新增、刪除都在同一個交易，空間不足時整張都不寫入。
+   - 領域資料是 kv 的單一 `state` JSON。照片中繼資料與縮圖在 `photos`，原圖在 `photoBlobs`（key 同照片 id）。
+   - 新增、刪除一張照片與清除未歸屬照片，都在同一個 readwrite 交易裡，並經由 `photos.ts` 的 `allOrNothing` 保證「整張（或整批）要嘛都成功、要嘛都不變」。同一個交易本身並不保證這件事，要分兩條路徑處理：
+     - **非同步失敗**（請求送出後失敗，或 commit 時空間不足）：瀏覽器自行中止交易，撤銷已送出的請求；交易的 `error` 說明原因（空間不足時請求端只看到 `AbortError`，要讀 `transaction.error`）。
+     - **同步拋錯**（例如原圖無法複製的 `DataCloneError`、同步的 `QuotaExceededError`）：交易**不會**自動中止，前面已送出的請求照樣會 commit。所以任何失敗都主動 `abort()` 仍在進行中的交易；已結束或已有 `error` 的交易不再 abort（重複呼叫會丟 `InvalidStateError`）。
+   - 已送出的請求在中止後都會 reject，全部接住，錯誤統一回報：交易的 `error` 是空間不足就拋它，否則拋原錯誤。
    - 照片另有逐位學生的 zip 備份，備份時間記在 kv `photoBackupAt:<studentId>`／`photoBackupAt:unassigned`，不進 `AppState`，也不動 `SCHEMA_VERSION`。
 
 ## 後果
@@ -49,7 +53,7 @@ BloomIn 是單機離線 PWA，所有資料只存在這台裝置的 IndexedDB（�
 - [ ] 舊分頁仍開著時，新版本會收到 `blocked`，畫面要出現關閉舊分頁的提示，舊連線關閉後自動完成（`src/App.test.tsx`）。
 - [ ] 本版開著時，更新的版本開啟不會被擋住（`src/store/db.test.ts`「本分頁不會擋住較新版本的升級」）。
 - [ ] 讓出連線時未存的變更有寫進去，畫面擋住輸入且沒有未處理的錯誤（`src/App.superseded.test.tsx`）。
-- [ ] 新增的 store 若與既有 store 有關聯（例如 `photos`／`photoBlobs`），新增與刪除放在同一個交易，空間不足時整筆不寫入（`src/store/photos.test.ts`）。
+- [ ] 新增的 store 若與既有 store 有關聯（例如 `photos`／`photoBlobs`），新增與刪除放在同一個交易並經由 `allOrNothing`（同步拋錯也要主動中止），測試要涵蓋非同步失敗與同步拋錯兩種（`src/store/photos.test.ts`）。
 - [ ] 若更動 kv 的 key 或 `AppState`，確認 JSON 備份格式與 `SCHEMA_VERSION` 是否需要一起處理；照片相關的 key 不進 `AppState`。
 - [ ] 同步更新 `docs/schema.dbml` 的 Project Note 版本號與各表 Note，並跑 `ec_gate.py dbml`。
 
@@ -65,4 +69,5 @@ BloomIn 是單機離線 PWA，所有資料只存在這台裝置的 IndexedDB（�
 | 存檔串行化，舊快照不覆蓋新資料 | `src/store/useStore.persist.test.ts` |
 | 還原寫入失敗時不顯示成功 | `src/components/BackupPanel.test.tsx` |
 | 照片兩個 store 同一交易、空間不足（含交易中止形式） | `src/store/photos.test.ts`、`src/store/photoBackup.test.ts` |
+| 請求同步拋錯時整張／整批都不變（全有或全無） | `src/store/photos.test.ts`「寫入或刪除途中出錯時兩邊都不留下變更」 |
 | 還原資料備份不影響照片 | `src/store/photos.test.ts` |
