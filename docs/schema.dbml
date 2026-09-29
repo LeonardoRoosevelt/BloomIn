@@ -37,7 +37,7 @@ Table students {
 Table photos {
   id         varchar   [primary key, note: 'keyPath；匯入時以此判斷已存在並略過，見「已存在的照片在匯入時略過（Edge Case）」']
   student_id varchar   [not null, note: 'IndexedDB 屬性名 studentId。邏輯參照 students.id，但不強制：允許暫時孤立，見「找不到所屬學生的照片仍會匯入（Edge Case）」']
-  record_date varchar  [not null, note: 'IndexedDB 屬性名 recordDate，YYYY-MM-DD；只驗證格式、不限範圍']
+  record_date varchar  [not null, note: 'IndexedDB 屬性名 recordDate，YYYY-MM-DD；必須是日曆上存在的日期（匯入時驗證），不限年份範圍']
   caption    varchar   [not null, default: '', note: '可為空字串，不用 null（與 types.ts 慣例一致）']
   thumb      blob      [not null, note: 'image/jpeg，長邊 ≤ 400px，品質 0.7；列表只讀它，見「照片依紀錄日期由新到舊並依月分組（Edge Case）」']
   width      integer   [not null, note: 'blob 實際像素寬（已套用 EXIF 方向）']
