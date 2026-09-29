@@ -58,7 +58,7 @@ function Superseded() {
       <EmptyState
         art={<IconAlert size={72} />}
         title="BloomIn 已在其他分頁更新，請重新開啟 App"
-        description="這個畫面使用的是舊版，已無法儲存資料。離開前的最後變更已經存好。"
+        description="這個畫面使用的是舊版，已無法儲存資料。重新開啟後，請確認最近一筆修改是否還在。"
         action={<Button onClick={() => location.reload()}>重新載入</Button>}
       />
     </div>

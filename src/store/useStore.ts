@@ -241,7 +241,7 @@ function schedulePersist(state: AppState): void {
 
 export async function flushPersist(): Promise<void> {
   clearTimeout(timer)
-  // 已讓出連線：寫入必然失敗，只會變成未處理的錯誤；讓出前的最後變更已由 db.ts 寫入
+  // 已讓出連線：寫入必然失敗，只會變成未處理的錯誤；讓出前的最後變更已由 db.ts 盡力寫入（成功與否無從得知，所以提示畫面不做保證）
   if (useStore.getState().superseded) {
     pending = null
     return
