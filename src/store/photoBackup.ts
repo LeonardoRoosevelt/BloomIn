@@ -129,8 +129,8 @@ export async function importPhotoBackup(
       skippedExisting++
       continue
     }
-    const blobBytes = files[entry.file]
-    const thumbBytes = files[entry.thumbFile]
+    const blobBytes = zipEntry(files, entry.file)
+    const thumbBytes = zipEntry(files, entry.thumbFile)
     // 少了圖檔就不是一張完整的照片：略過這張，不留下殘缺紀錄，其他照常匯入
     if (!blobBytes || !thumbBytes) {
       missingFile++
@@ -177,7 +177,7 @@ async function parsePhotoBackup(zipFile: Blob): Promise<ParsedBackup> {
   } catch {
     return { ok: false, error: '這不是有效的 zip 檔案，可能選錯檔案或檔案已損壞。' }
   }
-  const manifestBytes = files['manifest.json']
+  const manifestBytes = zipEntry(files, 'manifest.json')
   if (!manifestBytes) {
     return { ok: false, error: '這不是 BloomIn 的照片備份（缺少 manifest.json）。' }
   }
@@ -206,7 +206,51 @@ async function parsePhotoBackup(zipFile: Blob): Promise<ParsedBackup> {
   if (!Array.isArray(manifest.photos)) {
     return { ok: false, error: '照片備份的照片清單已損壞，為了避免寫入殘缺資料而中止。' }
   }
+  // 逐筆驗證要在寫入第一張之前做完：任何一筆看不懂就整份拒絕，不留下「寫了一半」的匯入
+  for (const [i, entry] of (manifest.photos as unknown[]).entries()) {
+    const problem = entryProblem(entry)
+    if (problem !== null) {
+      return {
+        ok: false,
+        error: `照片備份的第 ${i + 1} 筆資料${problem}，為了避免寫入殘缺資料而整份中止。`,
+      }
+    }
+  }
   return { ok: true, files, manifest: manifest as PhotoManifest }
+}
+
+/**
+ * manifest 單筆項目的結構檢查，對應 photos store 的 not null 欄位。
+ * 回傳問題描述，沒問題回傳 null。
+ */
+function entryProblem(entry: unknown): string | null {
+  if (typeof entry !== 'object' || entry === null) return '不是預期的格式'
+  const e = entry as Record<string, unknown>
+  if (!isNonEmptyString(e.id)) return '缺少有效的 id'
+  if (!isNonEmptyString(e.studentId)) return '缺少有效的學生 id'
+  if (typeof e.recordDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(e.recordDate)) {
+    return '的紀錄日期格式不對'
+  }
+  if (typeof e.caption !== 'string') return '的說明欄位損壞'
+  if (typeof e.createdAt !== 'string') return '的建立時間欄位損壞'
+  if (!isPositiveInteger(e.width) || !isPositiveInteger(e.height)) return '的尺寸欄位損壞'
+  // 路徑限定在各自的目錄：擋下指向 manifest.json 或其他檔案的項目
+  if (typeof e.file !== 'string' || !e.file.startsWith('photos/')) return '的原圖路徑不對'
+  if (typeof e.thumbFile !== 'string' || !e.thumbFile.startsWith('thumbs/')) return '的縮圖路徑不對'
+  return null
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v !== ''
+}
+
+function isPositiveInteger(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0
+}
+
+/** 只看 zip 本身的項目：一般物件的索引會順著原型鏈找到 constructor 之類的屬性。 */
+function zipEntry(files: Record<string, Uint8Array>, path: string): Uint8Array | undefined {
+  return Object.hasOwn(files, path) ? files[path] : undefined
 }
 
 function jpeg(bytes: Uint8Array): Blob {

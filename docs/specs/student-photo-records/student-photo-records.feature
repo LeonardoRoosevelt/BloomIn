@@ -177,7 +177,7 @@ Feature: 學生照片紀錄本
       Then photos 中存在 "p9"
       And 回報其中 1 張屬於目前找不到的學生
 
-    # coverage: Error Handling / 不是 BloomIn 照片備份、版本過新、zip 損壞
+    # coverage: Error Handling / 不是 BloomIn 照片備份、版本過新、zip 損壞、manifest 項目結構無效
     @error
     Scenario Outline: 無效的照片備份被整份拒絕（Error Handling）
       Given photos 中存在 id 為 "p1" 的記錄
@@ -191,6 +191,11 @@ Feature: 學生照片紀錄本
         | 缺少 manifest.json              |
         | manifest 的 app 不是 bloomin-photos |
         | manifest 的 schemaVersion 比 App 新 |
+        | manifest 中有欄位缺漏的項目             |
+        | manifest 中有 id 不是非空字串的項目       |
+        | manifest 中有 recordDate 不是 YYYY-MM-DD 的項目 |
+        | manifest 中有 width 或 height 不是正整數的項目 |
+        | manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下 |
 
     # coverage: Error Handling / manifest 列出的照片檔缺失
     @error

@@ -34,11 +34,16 @@ function stubShareSheet(outcome: 'share' | 'cancel' = 'share'): { shared: File[]
 
 /**
  * 依照片備份格式手工組一份 zip（不經過匯出程式，當作獨立的 Given）。
- * omitFiles 列出的 id 只出現在 manifest，zip 內沒有圖檔。
+ * omitFiles 列出的 id 只出現在 manifest，zip 內沒有圖檔；
+ * entryPatch 依 id 覆寫 manifest 項目的欄位（值為 undefined 即從 JSON 中移除該欄位）。
  */
 function backupZip(
   photos: ReturnType<typeof photoRecord>[],
-  options: { omitFiles: string[]; manifest: Record<string, unknown> } = { omitFiles: [], manifest: {} },
+  options: {
+    omitFiles: string[]
+    manifest: Record<string, unknown>
+    entryPatch: Record<string, Record<string, unknown>>
+  } = { omitFiles: [], manifest: {}, entryPatch: {} },
 ): Promise<File> {
   return (async () => {
     const files: Zippable = {}
@@ -51,7 +56,7 @@ function backupZip(
         files[file] = new Uint8Array(await blob.arrayBuffer())
         files[thumbFile] = new Uint8Array(await thumb.arrayBuffer())
       }
-      entries.push({ ...meta, file, thumbFile })
+      entries.push({ ...meta, file, thumbFile, ...options.entryPatch[p.id] })
     }
     const manifest = {
       app: 'bloomin-photos',
@@ -185,6 +190,7 @@ describe('匯入照片備份', () => {
     const zip = await backupZip([photoRecord({ id: 'p1' }), photoRecord({ id: 'p2' })], {
       omitFiles: ['p2'],
       manifest: {},
+      entryPatch: {},
     })
 
     const result = await importPhotoBackup(zip, new Set(['s1']))
@@ -256,15 +262,46 @@ describe('無效的照片備份', () => {
     ],
     [
       'manifest 的 app 不是 bloomin-photos',
-      () => backupZip([photoRecord({ id: 'p2' })], { omitFiles: [], manifest: { app: 'someotherapp' } }),
+      () => backupZip([photoRecord({ id: 'p2' })], { omitFiles: [], manifest: { app: 'someotherapp' }, entryPatch: {} }),
     ],
     [
       'manifest 的 schemaVersion 比 App 新',
-      () => backupZip([photoRecord({ id: 'p2' })], { omitFiles: [], manifest: { schemaVersion: 2 } }),
+      () => backupZip([photoRecord({ id: 'p2' })], { omitFiles: [], manifest: { schemaVersion: 2 }, entryPatch: {} }),
     ],
   ]
 
-  it.each(invalidFiles)('無效的照片備份被整份拒絕（Error Handling）：%s', async (_problem, makeFile) => {
+  /*
+   * manifest 項目結構無效：第 1 筆 p2 完全合法（含圖檔），第 2 筆 p3 有問題。
+   * 若驗證不是在寫入前對「整份」做完，p2 會先被寫進去 —— 這正是要擋的情況。
+   */
+  const brokenEntry = (patch: Record<string, unknown>) => () =>
+    backupZip([photoRecord({ id: 'p2' }), photoRecord({ id: 'p3' })], {
+      omitFiles: [],
+      manifest: {},
+      entryPatch: { p3: patch },
+    })
+  const brokenEntries: [string, Record<string, unknown>][] = [
+    ['manifest 中有欄位缺漏的項目（studentId）', { studentId: undefined }],
+    ['manifest 中有欄位缺漏的項目（recordDate）', { recordDate: undefined }],
+    ['manifest 中有欄位缺漏的項目（caption）', { caption: undefined }],
+    ['manifest 中有欄位缺漏的項目（createdAt）', { createdAt: undefined }],
+    ['manifest 中有欄位缺漏的項目（thumbFile）', { thumbFile: undefined }],
+    ['manifest 中有 id 不是非空字串的項目（缺漏）', { id: undefined }],
+    ['manifest 中有 id 不是非空字串的項目（null）', { id: null }],
+    ['manifest 中有 id 不是非空字串的項目（數字）', { id: 123 }],
+    ['manifest 中有 id 不是非空字串的項目（空字串）', { id: '' }],
+    ['manifest 中有 recordDate 不是 YYYY-MM-DD 的項目（斜線）', { recordDate: '2024/03/15' }],
+    ['manifest 中有 recordDate 不是 YYYY-MM-DD 的項目（未補零）', { recordDate: '2024-3-5' }],
+    ['manifest 中有 width 或 height 不是正整數的項目（0）', { width: 0 }],
+    ['manifest 中有 width 或 height 不是正整數的項目（小數）', { height: 1.5 }],
+    ['manifest 中有 width 或 height 不是正整數的項目（字串）', { width: '2000' }],
+    ['manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（原型鏈屬性）', { file: 'constructor' }],
+    ['manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（manifest.json）', { file: 'manifest.json' }],
+    ['manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（縮圖指向原圖目錄）', { thumbFile: 'photos/p3.jpg' }],
+  ]
+  for (const [problem, patch] of brokenEntries) invalidFiles.push([problem, brokenEntry(patch)])
+
+  it.each(invalidFiles)('無效的照片備份被整份拒絕（Error Handling）：%s', async (problem, makeFile) => {
     await seedPhotos(photoRecord({ id: 'p1' }))
 
     const result = await importPhotoBackup(await makeFile(), new Set(['s1']))
@@ -272,6 +309,9 @@ describe('無效的照片備份', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error).not.toBe('')
+    if (problem.startsWith('manifest 中有') || problem.startsWith('manifest 項目')) {
+      expect(result.error).toContain('第 2 筆')
+    }
     expect((await listAllPhotos()).map((p) => p.id)).toEqual(['p1'])
   })
 })

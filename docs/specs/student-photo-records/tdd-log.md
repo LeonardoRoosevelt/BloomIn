@@ -526,3 +526,40 @@ $ pnpm test
  Test Files  10 passed (10)
       Tests  98 passed (98)
 ```
+
+---
+
+# 修正輪（獨立 verifier 回報）
+
+## Fix B1 — manifest 單筆項目未驗證（Scenario Outline：無效的照片備份被整份拒絕（Error Handling））
+規格：`coverage.md` Error Handling 新增「manifest 中任何一筆項目結構無效」條目（並註明與「缺少圖檔的項目被略過」的區分）；`.feature` 該 Outline 的 Examples 新增 5 列（欄位缺漏、id 非非空字串、recordDate 非 YYYY-MM-DD、width/height 非正整數、檔案路徑不在 photos/ 或 thumbs/ 之下），Scenario 標題不變。gherkin／coverage 門禁 PASS。
+### Red
+測試：`src/store/photoBackup.test.ts::無效的照片備份 > 無效的照片備份被整份拒絕（Error Handling）：<問題>（變體）` 共 17 個變體。每份 zip 第 1 筆 p2 合法、第 2 筆 p3 損壞，沒有整份先驗證就會先寫入 p2。另外斷言錯誤訊息指出「第 2 筆」。
+```
+   × …：manifest 中有欄位缺漏的項目（studentId） 4ms
+     → expected true to be false // Object.is equality
+   × …：manifest 中有 id 不是非空字串的項目（缺漏） 1ms
+     → Data provided to an operation does not meet requirements.
+   × …：manifest 中有 id 不是非空字串的項目（null） 1ms
+     → Data provided to an operation does not meet requirements.
+   × …：manifest 中有 recordDate 不是 YYYY-MM-DD 的項目（斜線） 1ms
+     → expected true to be false // Object.is equality
+   × …：manifest 中有 width 或 height 不是正整數的項目（字串） 1ms
+     → expected true to be false // Object.is equality
+   × …：manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（原型鏈屬性） 1ms
+     → expected true to be false // Object.is equality
+   × …：manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下（manifest.json） 1ms
+     → expected true to be false // Object.is equality
+   （其餘 10 個變體同為 expected true to be false）
+      Tests  17 failed | 14 passed (31)
+```
+失敗類型：功能未實作。id 缺漏／null 時，IndexedDB 在 p2 已寫入後才拋 DataError；其餘變體被當成 ok:true 寫入殘缺資料，`file:'constructor'` 經原型鏈取到 Function 後存成「JPEG」。
+### Green
+變更：`src/store/photoBackup.ts`
+- `parsePhotoBackup` 在寫入前以 `entryProblem` 逐筆驗證：id／studentId 為非空字串、recordDate 符合 `^\d{4}-\d{2}-\d{2}$`、caption／createdAt 為字串、width／height 為正整數、file 以 `photos/` 開頭、thumbFile 以 `thumbs/` 開頭。任一筆不符就整份拒絕，並指出第幾筆。
+- zip 內檔案一律用 `zipEntry`（`Object.hasOwn`）查找，包括 manifest.json。
+```
+ Test Files  10 passed (10)
+      Tests  115 passed (115)
+```
+既有「缺少圖檔的項目被略過（Error Handling）」仍綠：結構合法但 zip 裡沒有該圖檔，仍是略過該張。
