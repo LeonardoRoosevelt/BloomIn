@@ -1034,3 +1034,29 @@ build 成功。
 
 ## 單元 5 — ADR：持久化與資料庫升級規則
 新增 `docs/decisions/0001-persistence-and-db-upgrades.md`，內容包括背景、六條決策（增量升級、blocked 提示、blocking 先寫後讓並擋住輸入、存檔串行化與失敗保留／常駐警告、還原寫入失敗 reject、照片與 state 分 store 且 JSON 備份不含照片）、後果（含仍待實機確認的項目）、下次修改 `DB_VERSION` 時的檢查清單，以及各規則對應的測試檔。純文件，無行為變更、無測試。
+
+## 更正與修正 — 單元 1 引入的未處理 rejection（`pnpm test` 自 3631435 起以非零碼結束）
+**更正**：單元 1 到單元 5 的 Green 紀錄寫「全綠」，但我只看了 `Tests N passed` 那一行，漏看了 `Errors 3 errors`。這段期間 `pnpm test` 實際以 exit=1 結束，那些「全綠」紀錄不正確。以 worktree 驗證：
+```
+3e2b7d8（單元 1 之前）  exit=0   Tests 132 passed (132)
+3631435（單元 1）       exit=1   Tests 132 passed (132)   Errors 3 errors
+```
+### Red（最終檢查時的真實輸出）
+```
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AbortError: A request was aborted, for example through a call to IDBTransaction.abort.
+This error originated in "src/store/photoBackup.test.ts" … "空間不足以交易中止回報時同樣視為空間不足（Error Handling）：匯入"
+（另兩個來自 src/store/photos.test.ts：交易中止形式的新增照片、非空間不足的交易中止）
+      Tests  145 passed (145)
+     Errors  3 errors
+exit=1
+```
+根因（查證後才修改）：`putPhoto` 拆成兩個 store 後寫成 `Promise.all([photos.put(), photoBlobs.put(), tx.done])`。交易在第一個 put 之後就中止時，第二個 put 在組陣列時同步拋錯，`Promise.all` 沒有被呼叫，第一個 put 的 promise 就成了沒人處理的 AbortError。每次 putPhoto 失敗漏一個，共 3 個。真實瀏覽器的空間不足多半在 commit 時才非同步中止，但只要任一個 put 同步拋錯（例如 DataCloneError）就會發生同樣的洩漏，所以這是 production 的問題，不只是測試造成的。
+### Green
+`src/store/photos.ts` `putPhoto`：把已送出的請求收進陣列，失敗時對每個請求 `.catch(() => undefined)`，再照原邏輯等交易結束、依 `transaction.error` 判斷空間不足。
+```
+ Test Files  18 passed (18)
+      Tests  145 passed (145)
+exit=0
+```
+build 成功。
