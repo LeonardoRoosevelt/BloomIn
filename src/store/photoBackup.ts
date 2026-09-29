@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { parseISODate, toISODate } from '../lib/date'
 import { shareFile, type ShareOutcome } from '../lib/share'
 import { getDb, PHOTOS_STORE, savePhotoBackupAt } from './db'
-import { isQuotaError, listAllPhotos, type Photo } from './photos'
+import { isQuotaError, listAllPhotos, putPhoto, type Photo } from './photos'
 
 /**
  * 照片備份檔（zip）。
@@ -150,7 +150,7 @@ export async function importPhotoBackup(
       createdAt: entry.createdAt,
     }
     try {
-      await db.put(PHOTOS_STORE, photo)
+      await putPhoto(photo)
     } catch (err) {
       if (!isQuotaError(err)) throw err
       // 空間滿了，後面的也存不進去；已匯入的保留，回報剩幾張

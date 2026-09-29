@@ -93,6 +93,23 @@ export async function deletePhoto(id: string): Promise<void> {
   await db.delete(PHOTOS_STORE, id)
 }
 
+/**
+ * 寫入一張照片。空間不足時不論瀏覽器以哪種形式回報，拋出的都是 QuotaExceededError：
+ * 交易被中止時，請求只會收到籠統的 AbortError，真正原因在 transaction.error，
+ * 而它要等交易結束才確定。只看交易的 error，不把所有 AbortError 都當成空間不足。
+ */
+export async function putPhoto(photo: Photo): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction(PHOTOS_STORE, 'readwrite')
+  try {
+    await Promise.all([tx.store.put(photo), tx.done])
+  } catch (err) {
+    await tx.done.catch(() => undefined)
+    if (isQuotaError(tx.error)) throw tx.error
+    throw err
+  }
+}
+
 export interface AddPhotosResult {
   added: number
   /** 無法解碼而略過的檔案數（非圖片、格式不支援） */
@@ -110,7 +127,6 @@ export async function addPhotoFiles(
   meta: { recordDate: string; caption: string },
   codec: ImageCodec,
 ): Promise<AddPhotosResult> {
-  const db = await getDb()
   let added = 0
   let unreadable = 0
   let noSpace = 0
@@ -133,7 +149,7 @@ export async function addPhotoFiles(
     }
     try {
       // blob 與 thumb 在同一筆 put：空間不足時整筆不寫入，不會留下半張
-      await db.put(PHOTOS_STORE, photo)
+      await putPhoto(photo)
     } catch (err) {
       if (!isQuotaError(err)) throw err
       // 空間已滿，後面的也存不進去，停下來回報剩幾張沒存

@@ -5,6 +5,7 @@ import { getDb, loadPhotoBackupAt, PHOTOS_STORE, savePhotoBackupAt } from './db'
 import { describeExport, describeImport, exportPhotoBackup, importPhotoBackup } from './photoBackup'
 import { deletePhoto, getPhoto, listAllPhotos } from './photos'
 import { photoRecord, seedPhotos } from '../test/photoFixtures'
+import { simulateTransactionAbort } from '../test/storageFull'
 
 const NOW = new Date('2026-09-29T14:05:00+08:00')
 
@@ -248,6 +249,19 @@ describe('匯入照片備份', () => {
     await importPhotoBackup(shared[0]!, new Set(['s1', 's2']))
 
     expect(await snapshot()).toEqual(before)
+  })
+
+  it('空間不足以交易中止回報時同樣視為空間不足（Error Handling）：匯入', async () => {
+    await seedPhotos(photoRecord({ id: 'p1' }))
+    const zip = await backupZip([photoRecord({ id: 'p2' }), photoRecord({ id: 'p3' })])
+    simulateTransactionAbort('QuotaExceededError', 0)
+
+    const result = await importPhotoBackup(zip, new Set(['s1']))
+
+    vi.restoreAllMocks()
+    expect(result).toMatchObject({ ok: true, added: 0, noSpace: 2 })
+    expect(describeImport(result)).toContain('裝置儲存空間不足')
+    expect((await listAllPhotos()).map((p) => p.id)).toEqual(['p1'])
   })
 })
 

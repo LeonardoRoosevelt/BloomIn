@@ -76,6 +76,9 @@
 - 情境：儲存空間不足（IndexedDB `QuotaExceededError`）
   - 預期行為：顯示「裝置儲存空間不足，這張照片沒有存進去」；已存的照片不受影響；該筆不寫入。
   - 資料需求：單張寫入是單一交易（blob 與 thumb 同一筆 put），不會寫一半。
+- 情境：瀏覽器以不同形式回報空間不足 —— 寫入直接拋 `QuotaExceededError`，或交易被中止（該筆請求的錯誤是 `AbortError`，交易本身的 `error` 才是 `QuotaExceededError`）
+  - 預期行為：新增照片與匯入照片備份都視為空間不足，照上面兩個情境回報並停止。但交易因其他原因中止（交易的 `error` 不是 `QuotaExceededError`）時不能誤報為空間不足，錯誤照常呈現。判斷依據是交易的 error，不是請求的 `AbortError`。
+  - 資料需求：寫入時保留交易物件，失敗後等交易結束再讀 `transaction.error`。
 - 情境：匯入的 zip 不是 BloomIn 照片備份（manifest 缺失、`app` 不符）、manifest 版本比 App 新、或 zip 損壞
   - 預期行為：整份拒絕並說明原因，不寫入任何照片（沿用 `parseBackup` 的「寧可拒絕」原則）。
   - 資料需求：manifest `app`、`schemaVersion` 驗證。

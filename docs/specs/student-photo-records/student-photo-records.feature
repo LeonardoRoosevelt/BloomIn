@@ -131,6 +131,22 @@ Feature: 學生照片紀錄本
       Then 回報「裝置儲存空間不足」
       And photos 中仍只有 "p1"
 
+    # coverage: Error Handling / 空間不足以交易中止的形式回報
+    @error
+    Scenario: 空間不足以交易中止回報時同樣視為空間不足（Error Handling）
+      Given photos 中存在 id 為 "p1" 的記錄
+      And 裝置儲存空間已滿，瀏覽器以交易中止回報（請求錯誤為 AbortError、交易錯誤為 QuotaExceededError）
+      When 老師替學生 "s1" 新增一張照片，或匯入一份含 "p2"、"p3" 的照片備份
+      Then 回報「裝置儲存空間不足」並停止
+      And photos 中仍只有 "p1"
+
+    # coverage: Error Handling / 其他原因的交易中止
+    @error
+    Scenario: 非空間不足的交易中止不會被誤報為空間不足（Error Handling）
+      Given 瀏覽器寫入時交易因其他原因中止（交易錯誤不是 QuotaExceededError）
+      When 老師替學生 "s1" 新增一張照片
+      Then 不回報「裝置儲存空間不足」，錯誤照常呈現
+
     # coverage: Error Handling / 學生 id 不存在
     @error
     Scenario: 學生不存在時顯示找不到（Error Handling）

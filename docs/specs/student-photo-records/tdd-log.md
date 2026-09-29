@@ -713,3 +713,33 @@ $ pnpm build → ✓ built in 830ms
      → expected true to be false // Object.is equality
 ```
 還原後全套：`Tests 121 passed (121)`；build 成功。
+
+## Fix 3-3 — 空間不足以交易中止形式回報時被誤判
+規格：`coverage.md` Error Handling 新增「瀏覽器以不同形式回報空間不足」條目（判斷依據是交易的 error）；`.feature` 新增兩個 Scenario：「空間不足以交易中止回報時同樣視為空間不足（Error Handling）」「非空間不足的交易中止不會被誤報為空間不足（Error Handling）」。gherkin／coverage 門禁 PASS。
+模擬方式：`src/test/storageFull.ts` 的 `simulateTransactionAbort(錯誤名稱, 放行次數)`。它 spy `IDBObjectStore.prototype.put`：先照常送出請求，再呼叫 fake-indexeddb 的 `transaction._abort(錯誤名稱)`，重現瀏覽器中止交易（未完成的請求收到 AbortError、`transaction.error` 為指定錯誤）。只模擬瀏覽器邊界，不碰 App 程式。
+### Red
+測試：`src/store/photos.test.ts::…空間不足以交易中止回報時同樣視為空間不足（Error Handling）：新增照片`、`src/store/photoBackup.test.ts::…（Error Handling）：匯入`
+```
+   × 無法處理的輸入 > 空間不足以交易中止回報時同樣視為空間不足（Error Handling）：新增照片 4ms
+     → A request was aborted, for example through a call to IDBTransaction.abort.
+   × 匯入照片備份 > 空間不足以交易中止回報時同樣視為空間不足（Error Handling）：匯入 4ms
+     → A request was aborted, for example through a call to IDBTransaction.abort.
+      Tests  2 failed | 46 passed (48)
+```
+失敗類型：功能未實作。`isQuotaError` 只看請求拋出的錯誤；這裡是 AbortError，於是直接拋出。
+「非空間不足的交易中止不會被誤報為空間不足（Error Handling）」第一次就綠：既有行為，原本就會把錯誤原樣拋出。它是用來防止修過頭的護欄，有效性由下方突變檢查證明。
+### Green
+變更：
+- `src/store/photos.ts` 新增 `putPhoto`：保留交易物件，`Promise.all([put, tx.done])` 失敗後等 `tx.done` 結束；`transaction.error` 是空間不足就拋它，否則拋原錯誤。
+- `addPhotoFiles` 與 `importPhotoBackup` 都改用 `putPhoto`，原本「遇 QuotaExceededError 停止並計數」的邏輯不變。
+```
+ Test Files  12 passed (12)
+      Tests  124 passed (124)
+```
+突變檢查（暫時把所有 AbortError 都當成空間不足，跑完即還原）：
+```
+   × 無法處理的輸入 > 非空間不足的交易中止不會被誤報為空間不足（Error Handling） 6ms
+     → promise resolved "{ added: +0, unreadable: +0, …(1) }" instead of rejecting
+```
+還原後全套：`Tests 124 passed (124)`；build 成功。
+備註：Safari 舊版以 name 為 `QuotaExceededError`（code 22）的 DOMException 回報，既有的 name 判斷已涵蓋，未另加 code 判斷。

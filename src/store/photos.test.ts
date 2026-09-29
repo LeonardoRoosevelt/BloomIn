@@ -11,6 +11,7 @@ import {
 } from './photos'
 import { encodedOf, fakeCodec, fakeImageFile, unreadableFile } from '../test/fakeCodec'
 import { photoRecord, seedPhotos } from '../test/photoFixtures'
+import { simulateTransactionAbort } from '../test/storageFull'
 import { createInitialState } from '../domain/types'
 import { useStore } from './useStore'
 
@@ -149,7 +150,34 @@ describe('無法處理的輸入', () => {
     vi.restoreAllMocks()
     expect((await listAllPhotos()).map((p) => p.id)).toEqual([before[0]!.id])
   })
+
+  it('空間不足以交易中止回報時同樣視為空間不足（Error Handling）：新增照片', async () => {
+    await seedPhotos(photoRecord({ id: 'p1' }))
+    simulateTransactionAbort('QuotaExceededError', 0)
+
+    const result = await addPhotoFiles(
+      's1',
+      [fakeImageFile(4000, 3000), fakeImageFile(1200, 800)],
+      { recordDate: '2024-03-16', caption: '' },
+      fakeCodec,
+    )
+
+    expect(result).toMatchObject({ added: 0, noSpace: 2 })
+    expect(describeAddResult(result)).toContain('裝置儲存空間不足')
+    vi.restoreAllMocks()
+    expect((await listAllPhotos()).map((p) => p.id)).toEqual(['p1'])
+  })
+
+  it('非空間不足的交易中止不會被誤報為空間不足（Error Handling）', async () => {
+    simulateTransactionAbort('UnknownError', 0)
+
+    const attempt = addPhotoFiles('s1', [fakeImageFile(1200, 800)], { recordDate: '2024-03-16', caption: '' }, fakeCodec)
+
+    // 錯誤照常拋出，不會被包裝成「空間不足」的結果
+    await expect(attempt).rejects.toMatchObject({ name: expect.not.stringMatching('QuotaExceededError') })
+  })
 })
+
 
 describe('編輯照片', () => {
   it('編輯照片的日期與說明（Happy Path）', async () => {
