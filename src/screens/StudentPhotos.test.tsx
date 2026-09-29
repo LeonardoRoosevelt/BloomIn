@@ -210,4 +210,62 @@ describe('照片紀錄本畫面', () => {
     // 照片仍在檢視中，沒有被關掉
     expect(screen.getByRole('dialog', { name: '檢視照片' })).toBeTruthy()
   })
+
+  /** 收集測試期間的未處理 rejection；回傳停止收集並取得結果的函式。 */
+  function collectUnhandled(): () => unknown[] {
+    const seen: unknown[] = []
+    const on = (reason: unknown) => seen.push(reason)
+    process.on('unhandledRejection', on)
+    return () => {
+      process.off('unhandledRejection', on)
+      return seen
+    }
+  }
+
+  async function openViewerOfP1() {
+    await seedPhotos(photoRecord({ id: 'p1', caption: '原本的說明' }))
+    render(<StudentPhotos studentId="s1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /開啟.*照片/ }))
+    const viewer = await screen.findByRole('dialog', { name: '檢視照片' })
+    await within(viewer).findByText('原本的說明')
+    return viewer
+  }
+
+  it('編輯或刪除失敗時顯示錯誤（Error Handling）：編輯', async () => {
+    const stop = collectUnhandled()
+    const viewer = await openViewerOfP1()
+    fireEvent.click(within(viewer).getByRole('button', { name: '編輯' }))
+    fireEvent.change(await screen.findByDisplayValue('原本的說明'), { target: { value: '改過的說明' } })
+    // 瀏覽器寫入 photos 時發生錯誤
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('Internal error.', 'UnknownError')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText(/無法儲存修改/)).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 20))
+    vi.restoreAllMocks()
+    expect(screen.getByRole('dialog', { name: '檢視照片' })).toBeTruthy()
+    expect((await getPhoto('p1'))!.caption).toBe('原本的說明')
+    expect(stop()).toEqual([])
+  })
+
+  it('編輯或刪除失敗時顯示錯誤（Error Handling）：刪除', async () => {
+    const stop = collectUnhandled()
+    const viewer = await openViewerOfP1()
+    vi.spyOn(IDBObjectStore.prototype, 'delete').mockImplementation(() => {
+      throw new DOMException('Internal error.', 'UnknownError')
+    })
+
+    fireEvent.click(within(viewer).getByRole('button', { name: '刪除' }))
+    fireEvent.click(await screen.findByRole('button', { name: '刪除照片' }))
+
+    expect(await screen.findByText(/無法刪除照片/)).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 20))
+    vi.restoreAllMocks()
+    expect(screen.getByRole('dialog', { name: '檢視照片' })).toBeTruthy()
+    expect(await getPhoto('p1')).toBeDefined()
+    expect(stop()).toEqual([])
+  })
 })

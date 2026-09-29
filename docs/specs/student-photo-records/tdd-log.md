@@ -743,3 +743,34 @@ $ pnpm build → ✓ built in 830ms
 ```
 還原後全套：`Tests 124 passed (124)`；build 成功。
 備註：Safari 舊版以 name 為 `QuotaExceededError`（code 22）的 DOMException 回報，既有的 name 判斷已涵蓋，未另加 code 判斷。
+
+## Fix 3-1 — Viewer 編輯／刪除失敗靜默；countPhotos 失敗吞錯
+規格：`coverage.md` Error Handling 新增兩個條目：「編輯或刪除時寫入失敗」「學生詳情頁計算照片張數失敗」。`.feature` 新增兩個 Scenario：「編輯或刪除失敗時顯示錯誤（Error Handling）」「照片張數取不到時入口不顯示張數（Error Handling）」。gherkin／coverage 門禁 PASS。
+### Red
+測試：
+- `src/screens/StudentPhotos.test.tsx::…編輯或刪除失敗時顯示錯誤（Error Handling）：編輯`（spy `IDBObjectStore.prototype.put` 拋 UnknownError）
+- `…：刪除`（spy `IDBObjectStore.prototype.delete` 拋 UnknownError）
+- 新檔 `src/screens/StudentDetail.test.tsx::…照片張數取不到時入口不顯示張數（Error Handling）`（spy `IDBIndex.prototype.count`）
+三者都另外收集 `unhandledRejection`，並斷言檢視器仍開著、資料不變。
+```
+   × 學生詳情頁的照片紀錄本入口 > 照片張數取不到時入口不顯示張數（Error Handling） 168ms
+     → expected [ Array(1) ] to deeply equal []
+   × 照片紀錄本畫面 > 編輯或刪除失敗時顯示錯誤（Error Handling）：編輯 1052ms
+     → Unable to find an element with the text: /無法儲存修改/. …
+   × 照片紀錄本畫面 > 編輯或刪除失敗時顯示錯誤（Error Handling）：刪除 1045ms
+     → Unable to find an element with the text: /無法刪除照片/. …
+      Tests  3 failed | 9 passed (12)
+```
+失敗類型：功能未實作。`void updatePhoto(...)`、`void deletePhoto(...).then(onDeleted)`、`void countPhotos(...).then(...)` 的錯誤都變成未處理的 rejection，畫面沒有任何提示。
+### Green
+變更：
+- `src/screens/StudentPhotos.tsx`：Viewer 改用 `saveEdit`／`confirmDelete`（try/catch）。
+  - 編輯失敗：編輯表單保持開著，表單內顯示「無法儲存修改：<原因>」，可直接重試。
+  - 刪除失敗：關閉確認表單，檢視器上顯示「無法刪除照片：<原因>」（role=alert）。
+  - 新增 `errorText`，CSS 補 `.viewerError`。
+- `src/screens/StudentDetail.tsx`：`countPhotos` 失敗時 `setPhotoCount(null)`，入口只顯示「照片紀錄本」。
+```
+ Test Files  13 passed (13)
+      Tests  127 passed (127)
+```
+build 成功。

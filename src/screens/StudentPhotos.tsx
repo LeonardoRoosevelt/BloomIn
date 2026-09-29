@@ -256,6 +256,10 @@ export function StudentPhotos({ studentId }: { studentId: string }) {
   )
 }
 
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 function formatMB(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024)).toLocaleString('zh-TW')} MB`
 }
@@ -298,7 +302,34 @@ function Viewer({
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [draft, setDraft] = useState<{ recordDate: string; caption: string } | null>(null)
+  // 寫入失敗不能看起來像成功：編輯的錯誤顯示在仍開著的編輯表單裡（可直接重試），刪除的顯示在檢視器上
+  const [editError, setEditError] = useState<string | null>(null)
+  const [viewerError, setViewerError] = useState<string | null>(null)
   const url = useObjectUrl(photo?.blob ?? null)
+
+  async function saveEdit() {
+    if (!draft) return
+    try {
+      // 只改日期與說明，照片本身不動
+      await updatePhoto(photoId, { recordDate: draft.recordDate, caption: draft.caption.trim() })
+      setPhoto((await getPhoto(photoId)) ?? null)
+      setDraft(null)
+      setEditError(null)
+      onChanged()
+    } catch (err) {
+      setEditError(`無法儲存修改：${errorText(err)}`)
+    }
+  }
+
+  async function confirmDelete() {
+    try {
+      await deletePhoto(photoId)
+      onDeleted()
+    } catch (err) {
+      setConfirmingDelete(false)
+      setViewerError(`無法刪除照片：${errorText(err)}`)
+    }
+  }
 
   useEffect(() => {
     void getPhoto(photoId).then((p) => setPhoto(p ?? null))
@@ -316,7 +347,11 @@ function Viewer({
           iconOnly
           aria-label="編輯"
           disabled={photo === null}
-          onClick={() => photo && setDraft({ recordDate: photo.recordDate, caption: photo.caption })}
+          onClick={() => {
+            if (!photo) return
+            setEditError(null)
+            setDraft({ recordDate: photo.recordDate, caption: photo.caption })
+          }}
         >
           <IconEdit size={20} />
         </Button>
@@ -325,6 +360,11 @@ function Viewer({
         </Button>
       </div>
       {url !== null ? <ZoomableImage src={url} /> : <div className={s.viewerStage} />}
+      {viewerError !== null && (
+        <p className={`${s.warn} ${s.viewerError}`} role="alert">
+          {viewerError}
+        </p>
+      )}
       {photo && (
         <div className={s.viewerInfo}>
           <div className={s.viewerDate}>{formatDateLong(photo.recordDate)}</div>
@@ -341,20 +381,7 @@ function Viewer({
             <Button variant="secondary" onClick={() => setDraft(null)}>
               取消
             </Button>
-            <Button
-              disabled={draft === null || draft.recordDate === ''}
-              onClick={() => {
-                if (!draft) return
-                // 只改日期與說明，照片本身不動
-                void updatePhoto(photoId, { recordDate: draft.recordDate, caption: draft.caption.trim() })
-                  .then(() => getPhoto(photoId))
-                  .then((p) => {
-                    setPhoto(p ?? null)
-                    setDraft(null)
-                    onChanged()
-                  })
-              }}
-            >
+            <Button disabled={draft === null || draft.recordDate === ''} onClick={() => void saveEdit()}>
               儲存
             </Button>
           </>
@@ -362,6 +389,7 @@ function Viewer({
       >
         {draft && (
           <>
+            {editError !== null && <p className={s.warn}>{editError}</p>}
             <Field label="紀錄日期" hint="紙本紀錄上的日期，不是拍照的日期。">
               <Input
                 type="date"
@@ -390,12 +418,7 @@ function Viewer({
             <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
               取消
             </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                void deletePhoto(photoId).then(onDeleted)
-              }}
-            >
+            <Button variant="danger" onClick={() => void confirmDelete()}>
               刪除照片
             </Button>
           </>

@@ -37,7 +37,10 @@ export function StudentDetail({ studentId }: { studentId: string }) {
   const [photoCount, setPhotoCount] = useState<number | null>(null)
 
   useEffect(() => {
-    void countPhotos(studentId).then(setPhotoCount)
+    // 取不到張數就只顯示入口不帶數字；顯示錯的張數比不顯示更糟
+    countPhotos(studentId)
+      .then(setPhotoCount)
+      .catch(() => setPhotoCount(null))
   }, [studentId])
 
   const student = data.students.find((x) => x.id === studentId)

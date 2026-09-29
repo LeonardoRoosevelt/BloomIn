@@ -154,6 +154,25 @@ Feature: 學生照片紀錄本
       When 老師開啟學生 "ghost" 的照片紀錄本
       Then 顯示「找不到這位學生」
 
+    # coverage: Error Handling / 編輯或刪除時寫入失敗
+    @error
+    Scenario: 編輯或刪除失敗時顯示錯誤（Error Handling）
+      Given photos 中存在 id 為 "p1"、caption 為 "原本的說明" 的記錄
+      And 瀏覽器寫入 photos 時發生錯誤
+      When 老師在檢視 "p1" 時修改說明並儲存，或確認刪除 "p1"
+      Then 顯示「無法儲存修改」或「無法刪除照片」的錯誤訊息
+      And 檢視器保持開著，"p1" 的 caption 仍為 "原本的說明"
+      And 沒有未處理的錯誤
+
+    # coverage: Error Handling / 照片張數取不到
+    @error
+    Scenario: 照片張數取不到時入口不顯示張數（Error Handling）
+      Given students 中存在 id 為 "s1" 的學生
+      And 瀏覽器計算照片張數時發生錯誤
+      When 老師開啟學生 "s1" 的詳情頁
+      Then 顯示「照片紀錄本」入口但不帶張數
+      And 沒有未處理的錯誤
+
     # coverage: Error Handling / 讀取照片失敗
     @error
     Scenario: 讀取照片失敗時顯示錯誤（Error Handling）

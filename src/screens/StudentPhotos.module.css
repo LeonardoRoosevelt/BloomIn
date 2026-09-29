@@ -194,3 +194,8 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-normal);
 }
+
+.viewerError {
+  margin: 0 var(--sp-4) var(--sp-2);
+  flex-shrink: 0;
+}
