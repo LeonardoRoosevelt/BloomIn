@@ -52,9 +52,17 @@ export function photoBackupFileName(now: Date, scope: PhotoBackupScope): string 
   const d = String(now.getDate()).padStart(2, '0')
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
-  // 這些字元在 iOS「檔案」、Windows 或 zip 工具裡不能出現在檔名中，換成底線，姓名其餘部分照留
-  const who = scope.kind === 'student' ? scope.studentName.replace(/[/\\:*?"<>|]/g, '_') : '未歸屬'
+  const who = scope.kind === 'student' ? safeFileNamePart(scope.studentName) : '未歸屬'
   return `bloomin-照片備份-${who}-${y}${m}${d}-${hh}${mm}.zip`
+}
+
+/**
+ * 姓名放進檔名前的處理：iOS「檔案」、Windows 或 zip 工具不接受的字元與控制字元換成底線，
+ * 姓名其餘部分照留；處理後為空或只剩 .（. 與 .. 在檔案系統有特殊意義）就改用「學生」。
+ */
+function safeFileNamePart(name: string): string {
+  const cleaned = name.replace(/[/\\:*?"<>|\u0000-\u001f\u007f]/g, '_').trim()
+  return /^\.*$/.test(cleaned) ? '學生' : cleaned
 }
 
 /**

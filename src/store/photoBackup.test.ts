@@ -70,16 +70,23 @@ async function snapshot() {
 }
 
 describe('照片備份檔名', () => {
-  it('學生姓名含檔名不允許的字元時仍能匯出（Edge Case）', () => {
-    const name = photoBackupFileName(NOW, { kind: 'student', studentId: 's1', studentName: 'A/B\\C:D*E?F"G<H>I|J' })
+  const nameCases: [string, string, string][] = [
+    ['含檔名不允許的字元', 'A/B\\C:D*E?F"G<H>I|J', 'A_B_C_D_E_F_G_H_I_J'],
+    ['含控制字元', '王\u0007小\u007f明', '王_小_明'],
+    ['只有空白', '   ', '學生'],
+    ['只有一個 .', '.', '學生'],
+    ['只有 ..', '..', '學生'],
+  ]
 
+  it.each(nameCases)('學生姓名含檔名不允許的字元時仍能匯出（Edge Case）：%s', (_case, studentName, expected) => {
+    const name = photoBackupFileName(NOW, { kind: 'student', studentId: 's1', studentName })
+
+    expect(name).toMatch(/^bloomin-照片備份-.+-\d{8}-\d{4}\.zip$/)
+    expect(name.slice('bloomin-照片備份-'.length, -'-YYYYMMDD-HHmm.zip'.length)).toBe(expected)
     for (const forbidden of ['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
       expect(name).not.toContain(forbidden)
     }
-    expect(name.startsWith('bloomin-照片備份-')).toBe(true)
-    expect(name.endsWith('.zip')).toBe(true)
-    // 姓名的其餘部分仍看得出來
-    expect(name).toMatch(/A.B.C.D.E.F.G.H.I.J/)
+    expect(name).not.toMatch(/[\u0000-\u001f\u007f]/)
   })
 })
 

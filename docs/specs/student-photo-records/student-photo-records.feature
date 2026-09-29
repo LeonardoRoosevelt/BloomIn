@@ -452,10 +452,19 @@ Feature: 學生照片紀錄本
 
     # coverage: Integration Points / shareFile 匯出某位學生的照片備份
     @edge-case
-    Scenario: 學生姓名含檔名不允許的字元時仍能匯出（Edge Case）
-      Given 學生姓名為 'A/B\C:D*E?F"G<H>I|J'
+    Scenario Outline: 學生姓名含檔名不允許的字元時仍能匯出（Edge Case）
+      Given 學生姓名<姓名的情況>
       When 產生該學生的照片備份檔名
-      Then 檔名不含 / \ : * ? " < > | 任何一個字元，且仍以 "bloomin-照片備份-" 開頭、".zip" 結尾
+      Then 檔名中的姓名部分為 "<檔名中的姓名>"
+      And 檔名不含 / \ : * ? " < > 與豎線，也不含控制字元，且以 "bloomin-照片備份-" 開頭、".zip" 結尾
+
+      Examples:
+        | 姓名的情況                                   | 檔名中的姓名        |
+        | 含檔名不允許的字元（A/B\C:D*E?F"G<H>I 豎線 J） | A_B_C_D_E_F_G_H_I_J |
+        | 含控制字元（王 U+0007 小 U+007F 明）          | 王_小_明            |
+        | 只有空白                                     | 學生                |
+        | 只有一個 .                                   | 學生                |
+        | 只有 ..                                      | 學生                |
 
     # coverage: Integration Points / zip 編解碼
     @integration

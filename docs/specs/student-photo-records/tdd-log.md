@@ -1102,3 +1102,23 @@ gherkin／coverage 門禁 PASS。
 所以兩個判斷都有測試守護。
 
 連帶修正：ADR 0001 決策 6 改寫為與實際行為一致。說明同一交易本身不保證整張，分別寫出非同步失敗（瀏覽器自行中止）與同步拋錯（必須主動中止）兩條路徑；檢查清單與測試對照表同步更新。build 成功。
+
+## Fix 5-2 — 備份檔名處理控制字元與空白／只有 . 的姓名
+規格：`.feature` 的「學生姓名含檔名不允許的字元時仍能匯出（Edge Case）」改為 Scenario Outline（標題不變），共 5 個 Examples：不允許的字元、控制字元、只有空白、只有一個 `.`、只有 `..`。`coverage.md` Integration 條目補上控制字元（U+0000–U+001F、U+007F）、去掉前後空白，以及處理後為空或只剩 `.` 時改用「學生」。gherkin／coverage 門禁 PASS。
+### Red
+測試：`src/store/photoBackup.test.ts::照片備份檔名 > 學生姓名含檔名不允許的字元時仍能匯出（Edge Case）：<情況>`（`it.each`，同時斷言檔名中的姓名部分、不含禁用字元與控制字元、開頭與結尾格式）
+```
+   × …：含控制字元 → expected '王\u0007小\u007f明' to be '王_小_明'
+   × …：只有空白   → expected '   ' to be '學生'
+   × …：只有一個 . → expected '.' to be '學生'
+   × …：只有 ..    → expected '..' to be '學生'
+      Tests  4 failed | 36 passed (40)     exit=1
+```
+「含檔名不允許的字元」一列是既有行為（修正輪前已實作），第一次就綠。
+### Green
+變更：`src/store/photoBackup.ts` 新增 `safeFileNamePart`：禁用字元與控制字元換成 `_`、去掉前後空白，處理後符合 `^\.*$`（空字串或只有 `.`）時改用「學生」。
+```
+ Test Files  18 passed (18)
+      Tests  153 passed (153)      exit=0
+```
+build 成功。
