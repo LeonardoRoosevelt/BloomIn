@@ -353,3 +353,129 @@ Error: Cannot find module './photoBackup' imported from '.../src/store/photoBack
  Test Files  8 passed (8)
       Tests  88 passed (88)
 ```
+
+## Slice 24 — 沒有照片時顯示空狀態（Edge Case）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 沒有照片時顯示空狀態（Edge Case）`（jsdom project；學生以 `useStore.setState` 放入 Given）
+```
+Error: Failed to resolve import "./StudentPhotos" from "src/screens/StudentPhotos.test.tsx". Does the file exist?
+```
+失敗類型：符號不存在
+### Green
+變更：新增 `src/screens/StudentPhotos.tsx`（返回列、標題、隱藏的 `<input type="file" accept="image/*" multiple>`、載入完成且無照片時的 EmptyState + 「新增照片」按鈕）與 `StudentPhotos.module.css`
+```
+ Test Files  9 passed (9)
+      Tests  89 passed (89)
+```
+
+## Slice 25 — 學生不存在時顯示找不到（Error Handling）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 學生不存在時顯示找不到（Error Handling）`
+```
+   × 照片紀錄本畫面 > 學生不存在時顯示找不到（Error Handling） 1011ms
+     → Unable to find an element with the text: 找不到這位學生. …
+```
+失敗類型：斷言失敗（找不到學生時元件回傳 null）
+### Green
+變更：`src/screens/StudentPhotos.tsx` — 沿用 StudentDetail 的「找不到這位學生」EmptyState 與「回到學生列表」
+```
+ Test Files  9 passed (9)
+      Tests  90 passed (90)
+```
+
+## Slice 26 — 檢視照片原尺寸（Happy Path）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 檢視照片原尺寸（Happy Path）`（`URL.createObjectURL` 以 stub 記下 URL→Blob，檢查檢視器 `<img>` 指向的 Blob 內容）
+```
+   × 照片紀錄本畫面 > 檢視照片原尺寸（Happy Path） 1008ms
+     → Unable to find role="button" and name `/開啟.*照片/`
+```
+失敗類型：功能未實作（沒有縮圖格也沒有檢視器）
+### Green
+變更：`src/screens/StudentPhotos.tsx` — 依月分組縮圖格（`Thumb` 只用 thumb 建 object URL）、`Viewer`（`getPhoto` 取原圖、顯示 `formatDateLong` 日期與說明）、`useObjectUrl`（卸載時 revoke）；CSS 補縮圖格與檢視器樣式
+```
+ Test Files  9 passed (9)
+      Tests  91 passed (91)
+```
+
+## Slice 27 — 儲存處理中不會重複寫入（Edge Case）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 儲存處理中不會重複寫入（Edge Case）`（`vi.mock('../lib/imageCodec')` 換成假 codec，decode 被 gate 卡住模擬處理中；連按兩次「儲存」後放行）
+初版以 `findByRole('dialog', { name: '新增照片' })` 找 Sheet，但共用 Sheet 沒有可及性名稱 —— 屬測試自身問題，改成直接找「儲存」按鈕後重跑（未修改 Sheet）：
+```
+   × 照片紀錄本畫面 > 儲存處理中不會重複寫入（Edge Case） 1012ms
+     → Unable to find role="button" and name "儲存"
+```
+失敗類型：功能未實作（沒有新增流程）
+### Green
+變更：`src/screens/StudentPhotos.tsx` — 選檔（`onChange` 清 value）→ Sheet（紀錄日期預設今天；單張才有說明欄）→ `save()`：`saving` 時直接返回、按鈕 disabled 並顯示「處理中…」，完成後顯示 `describeAddResult` 並重載列表；新增 `src/lib/imageCodec.ts`（真正的瀏覽器 codec，無單元測試）
+```
+ Test Files  9 passed (9)
+      Tests  92 passed (92)
+```
+突變檢查（拿掉 `saving` 判斷與 disabled，跑完即還原），證明測試抓得到重複寫入：
+```
+   × 照片紀錄本畫面 > 儲存處理中不會重複寫入（Edge Case） 1035ms
+     → expected [ { …(9) }, { …(9) } ] to have a length of 1 but got 2
+```
+還原後全套：`Tests 92 passed (92)`
+
+## Slice 28 — 顯示儲存空間用量（Integration）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 顯示儲存空間用量（Integration）`（stub `navigator.storage.estimate`）
+```
+   × 照片紀錄本畫面 > 顯示儲存空間用量（Integration） 1012ms
+     → Unable to find an element with the text: /已使用/. …
+```
+失敗類型：功能未實作
+### Green
+變更：`src/screens/StudentPhotos.tsx` — 列表變動後呼叫 `storageEstimate()`，有值時顯示「已使用 N MB，可用配額 M MB」
+```
+ Test Files  9 passed (9)
+      Tests  93 passed (93)
+```
+
+## Slice 29 — 無法取得儲存空間時不顯示用量（Integration）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 無法取得儲存空間時不顯示用量（Integration）`（`estimate()` 拋 `SecurityError`；以 `process.on('unhandledRejection')` 收集未處理的錯誤）
+```
+   × 照片紀錄本畫面 > 無法取得儲存空間時不顯示用量（Integration） 35ms
+     → expected [ …(2) ] to deeply equal []
+```
+失敗類型：斷言失敗（估計失敗變成 2 個未處理的 rejection —— 載入前後各估一次）
+### Green
+變更：`src/screens/StudentPhotos.tsx` — `storageEstimate()` 失敗時 `setUsage(null)`，不顯示也不報錯（未改動共用的 `storageEstimate`，避免影響 OfflineStatus）
+```
+ Test Files  9 passed (9)
+      Tests  94 passed (94)
+```
+
+## Slice 30 — 確認後刪除照片（State）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 確認後刪除照片（State）`
+```
+   × 照片紀錄本畫面 > 確認後刪除照片（State） 26ms
+     → Unable to find an accessible element with the role "button" and name "刪除"
+```
+失敗類型：功能未實作
+### Green
+變更：`src/screens/StudentPhotos.tsx` — 檢視器加「刪除」→ 確認 Sheet（「刪除後無法復原，除非有照片備份。」、取消／刪除照片）→ `deletePhoto` 後關閉檢視器並重載列表
+```
+ Test Files  9 passed (9)
+      Tests  95 passed (95)
+```
+
+## Slice 31 — 取消刪除時照片保留（State）
+### Red
+測試：`src/screens/StudentPhotos.test.tsx::照片紀錄本畫面 > 取消刪除時照片保留（State）`
+第一次執行即通過 → **既有行為，無 Green**：Slice 30 的確認 Sheet 的「取消」只關閉 Sheet。
+突變檢查（讓「刪除」不經確認就直接刪，跑完即還原）：
+```
+   × 照片紀錄本畫面 > 取消刪除時照片保留（State） 44ms
+     → expected undefined to be defined
+```
+還原後全套：
+```
+ Test Files  9 passed (9)
+      Tests  96 passed (96)
+```
