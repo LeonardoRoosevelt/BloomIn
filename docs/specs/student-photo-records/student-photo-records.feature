@@ -174,6 +174,15 @@ Feature: 學生照片紀錄本
       Then 裝置上的資料是 S2，不會被 S1 覆蓋
       And S1 失敗的警告直到 S2 真正存入才消失
 
+    # coverage: Error Handling / 還原時寫入裝置失敗
+    @error
+    Scenario: 還原時存檔失敗不會顯示已還原（Error Handling）
+      Given 設定頁的資料備份區
+      And 瀏覽器寫入 kv 的 state 時發生錯誤
+      When 老師還原一份 JSON 資料備份，或按「復原到匯入之前」
+      Then 顯示「還原的資料沒有存進裝置：<原因>。」
+      And 不顯示「已還原」或「已復原」
+
     # coverage: Error Handling / 編輯或刪除時寫入失敗
     @error
     Scenario: 編輯或刪除失敗時顯示錯誤（Error Handling）

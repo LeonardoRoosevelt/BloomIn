@@ -834,3 +834,42 @@ $ pnpm build → 成功
       Tests  130 passed (130)
 ```
 build 成功。
+
+## Fix B-c2 — 還原時存檔失敗仍顯示「已還原」
+規格：`coverage.md` Error Handling 新增「還原 JSON 資料備份或復原匯入時寫入裝置失敗」條目（不限照片功能）；`.feature` 新增 Scenario「還原時存檔失敗不會顯示已還原（Error Handling）」。gherkin／coverage 門禁 PASS。
+### Red
+測試：新檔 `src/components/BackupPanel.test.tsx`（jsdom＋真正的 BackupPanel）。spy `IDBObjectStore.prototype.put`，只讓 key 為 `'state'` 的寫入失敗，回復點照常寫入。
+- 「：還原資料備份」：選檔 → 覆蓋並還原
+- 「：復原到匯入之前」：先成功還原一次，再讓寫入失敗後按「復原到匯入之前」
+```
+   × 資料備份區 > 還原時存檔失敗不會顯示已還原（Error Handling）：還原資料備份 1167ms
+     → Unable to find an element with the text: /還原的資料沒有存進裝置：…/
+   × 資料備份區 > 還原時存檔失敗不會顯示已還原（Error Handling）：復原到匯入之前 1076ms
+     → Unable to find an element with the text: /還原的資料沒有存進裝置：…/
+      Tests  2 failed (2)
+```
+失敗類型：功能未實作。`importState`／`rollbackImport` 在寫入失敗後照常 resolve，畫面顯示綠色的「已還原」「已復原」，與存檔失敗警告互相矛盾。
+### Green
+變更：
+- `src/store/useStore.ts`：`importState`／`rollbackImport` 在 `flushPersist()` 後呼叫 `throwIfNotPersisted()`，若 `persistError` 非 null 就 reject。選擇 reject 是沿用既有 API 風格：`importState` 原本在寫回復點失敗時就是 reject；`rollbackImport` 的 boolean 表示「有沒有回復點」，不宜混入寫入結果。記憶體與常駐警告維持修正輪 3 的設計（`flushPersist` 本身仍不拋錯）。
+- `src/components/BackupPanel.tsx`：`confirmImport` 與「復原到匯入之前」捕捉錯誤，顯示「還原的資料沒有存進裝置：<原因>。」，不顯示成功訊息。
+
+第一次 Green 仍失敗，停下來查根因，沒有猜測修改。檢視輸出的 DOM：畫面其實已顯示「還原的資料沒有存進裝置：UnknownError: Internal error writing to the database.。」。多出的 `UnknownError: ` 來自 jsdom：jsdom 的 DOMException 不是 Node `Error` 的實例，`err instanceof Error` 為 false，改走 `String(err)`。真實瀏覽器的 DOMException 繼承 Error，不會有這個前綴。這是測試對原因字串寫得太死，Scenario 只要求「<原因>」，所以把比對放寬為 `/還原的資料沒有存進裝置：.*Internal error writing to the database\./`。
+放寬後重新確認 Red 仍成立（暫時把 `useStore.ts`、`BackupPanel.tsx` 換回 HEAD 版本，跑完即還原）：
+```
+   × …：還原資料備份 1139ms → Unable to find an element with the text: /還原的資料沒有存進裝置：.*Internal error writing to the database\./
+   × …：復原到匯入之前 1064ms → 同上
+```
+還原後全套：
+```
+ Test Files  16 passed (16)
+      Tests  132 passed (132)
+```
+build 成功。
+
+## 修正輪 4 最終狀態
+```
+$ ec_gate.py gherkin / coverage / tdd student-photo-records → 全部 PASS
+$ pnpm test → Test Files 16 passed (16) / Tests 132 passed (132)
+$ pnpm build → 成功
+```

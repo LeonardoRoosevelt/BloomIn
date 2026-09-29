@@ -15,6 +15,11 @@ interface Pending {
   exportedAt: string
 }
 
+/** 還原後寫入裝置失敗：不能顯示成功，說明資料沒存進去。 */
+function notPersistedText(err: unknown): string {
+  return `還原的資料沒有存進裝置：${err instanceof Error ? err.message : String(err)}。`
+}
+
 export function BackupPanel() {
   const data = useStore((st) => st.data)
   const updateSettings = useStore((st) => st.updateSettings)
@@ -66,7 +71,13 @@ export function BackupPanel() {
 
   async function confirmImport() {
     if (!pending) return
-    await importState(pending.state)
+    try {
+      await importState(pending.state)
+    } catch (err) {
+      setPending(null)
+      setMessage({ kind: 'err', text: notPersistedText(err) })
+      return
+    }
     setPending(null)
     setRollbackAt(new Date().toISOString())
     setMessage({ kind: 'ok', text: '已還原。若這不是你要的檔案，可以立即復原。' })
@@ -137,13 +148,15 @@ export function BackupPanel() {
               variant="secondary"
               block
               onClick={() => {
-                void rollbackImport().then((done) => {
-                  setMessage(
-                    done
-                      ? { kind: 'ok', text: '已復原到匯入之前的資料。' }
-                      : { kind: 'err', text: '找不到可復原的資料。' },
-                  )
-                })
+                rollbackImport()
+                  .then((done) => {
+                    setMessage(
+                      done
+                        ? { kind: 'ok', text: '已復原到匯入之前的資料。' }
+                        : { kind: 'err', text: '找不到可復原的資料。' },
+                    )
+                  })
+                  .catch((err: unknown) => setMessage({ kind: 'err', text: notPersistedText(err) }))
               }}
             >
               <IconRefresh size={18} />

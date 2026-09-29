@@ -27,9 +27,13 @@ interface StoreState {
   hydrate: () => Promise<void>
   /**
    * 以匯入的 state 完整取代現況。覆蓋前會先存下回復點，選錯檔案時還救得回來。
+   * 寫入裝置失敗時 reject（畫面上的資料已換成匯入的內容，由存檔失敗警告接手）。
    */
   importState: (next: AppState) => Promise<void>
-  /** 從回復點還原到最近一次匯入之前的狀態。找不到回復點時回傳 false。 */
+  /**
+   * 從回復點還原到最近一次匯入之前的狀態。找不到回復點時回傳 false。
+   * 寫入裝置失敗時 reject，與 importState 一致。
+   */
   rollbackImport: () => Promise<boolean>
   /** 記下備份完成的時間，提醒橫幅依此判斷。 */
   markBackedUp: (at: string) => void
@@ -86,6 +90,7 @@ export const useStore = create<StoreState>((set) => ({
     await saveRollback(useStore.getState().data)
     commit(set, () => next)
     await flushPersist()
+    throwIfNotPersisted()
   },
 
   rollbackImport: async () => {
@@ -93,6 +98,7 @@ export const useStore = create<StoreState>((set) => ({
     if (!snapshot) return false
     commit(set, () => snapshot.state)
     await flushPersist()
+    throwIfNotPersisted()
     return true
   },
 
@@ -201,6 +207,15 @@ export const useStore = create<StoreState>((set) => ({
       }
     }),
 }))
+
+/**
+ * 還原類操作要明確回報「有沒有真的存進裝置」：flushPersist 刻意不拋錯（由常駐警告處理），
+ * 但還原成功的訊息若照常出現，會與警告互相矛盾，讓老師以為備份已經還原完成。
+ */
+function throwIfNotPersisted(): void {
+  const persistError = useStore.getState().persistError
+  if (persistError !== null) throw new Error(persistError)
+}
 
 /** 依當下的課堂、學生與費率設定，重算一筆出席紀錄的快照欄位。 */
 function recompute(a: Attendance, d: AppState): Attendance {
