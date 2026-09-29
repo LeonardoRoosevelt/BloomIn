@@ -270,6 +270,7 @@ Feature: 學生照片紀錄本
         | manifest 中有 id 不是非空字串的項目       |
         | manifest 中有 recordDate 不是 YYYY-MM-DD 的項目 |
         | manifest 中有 recordDate 不是實際存在日期的項目 |
+        | manifest 中有 createdAt 不是 ISO 8601 的項目 |
         | manifest 中有 width 或 height 不是正整數的項目 |
         | manifest 項目的檔案路徑不在 photos/ 或 thumbs/ 之下 |
 

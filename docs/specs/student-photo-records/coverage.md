@@ -82,7 +82,7 @@
 - 情境：匯入的 zip 不是 BloomIn 照片備份（manifest 缺失、`app` 不符）、manifest 版本比 App 新、或 zip 損壞
   - 預期行為：整份拒絕並說明原因，不寫入任何照片（沿用 `parseBackup` 的「寧可拒絕」原則）。
   - 資料需求：manifest `app`、`schemaVersion` 驗證。
-- 情境：manifest 中任何一筆項目結構無效 —— 欄位缺漏或型別錯誤（`id`、`studentId` 不是非空字串；`recordDate` 不是 YYYY-MM-DD 或不是實際存在的日期（如 2024-13-99、2023-02-29）；`caption`、`createdAt` 不是字串；`width`、`height` 不是正整數），或項目的檔案路徑不在 `photos/`（原圖）、`thumbs/`（縮圖）之下（例如指向 `manifest.json`）
+- 情境：manifest 中任何一筆項目結構無效 —— 欄位缺漏或型別錯誤（`id`、`studentId` 不是非空字串；`recordDate` 不是 YYYY-MM-DD 或不是實際存在的日期（如 2024-13-99、2023-02-29）；`caption` 不是字串；`createdAt` 不是 App 產生的 ISO 8601 UTC 格式（`Date.prototype.toISOString()` 的輸出，例如 `2026-09-01T10:00:00.000Z`；列表同日排序直接比較這個字串，格式不一致就會排錯）；`width`、`height` 不是正整數），或項目的檔案路徑不在 `photos/`（原圖）、`thumbs/`（縮圖）之下（例如指向 `manifest.json`）
   - 預期行為：整份拒絕並說明是哪一筆有問題，一張都不寫入（驗證在寫入第一張之前完成）。與「manifest 列出的照片檔案缺失」區分：項目結構合法、只是 zip 裡沒有那個圖檔時，仍是略過該張。
   - 資料需求：逐筆驗證 manifest 項目欄位，對應 `photos` store 的 not null 欄位；檔案查找只看 zip 本身的項目（own property），不受物件原型鏈影響。
 - 情境：zip 中 manifest 列出的照片檔案缺失

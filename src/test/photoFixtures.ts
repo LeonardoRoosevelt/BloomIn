@@ -15,7 +15,7 @@ export function photoRecord(fields: Partial<Photo> & { id: string }): Photo {
     thumb: new Blob([`THUMB-${fields.id}`], { type: 'image/jpeg' }),
     width: 2000,
     height: 1500,
-    createdAt: '2026-09-01T10:00:00Z',
+    createdAt: '2026-09-01T10:00:00.000Z',
     ...fields,
   }
 }

@@ -143,7 +143,7 @@ describe('匯出照片備份', () => {
 describe('匯入照片備份', () => {
   it('匯入照片備份（Happy Path）', async () => {
     const p1 = photoRecord({ id: 'p1', studentId: 's1', recordDate: '2024-03-15', caption: '簽到卡', width: 1500, height: 2000 })
-    const p2 = photoRecord({ id: 'p2', studentId: 's2', recordDate: '2023-12-01', createdAt: '2026-09-02T10:00:00Z' })
+    const p2 = photoRecord({ id: 'p2', studentId: 's2', recordDate: '2023-12-01', createdAt: '2026-09-02T10:00:00.000Z' })
     const zip = await backupZip([p1, p2])
 
     const result = await importPhotoBackup(zip, new Set(['s1', 's2']))
@@ -236,7 +236,7 @@ describe('匯入照片備份', () => {
   it('匯出的備份可被匯入還原（Integration）', async () => {
     await seedPhotos(
       photoRecord({ id: 'p1', caption: '第 1 頁', width: 1500, height: 2000 }),
-      photoRecord({ id: 'p2', studentId: 's2', recordDate: '2019-01-05', createdAt: '2026-09-02T10:00:00Z' }),
+      photoRecord({ id: 'p2', studentId: 's2', recordDate: '2019-01-05', createdAt: '2026-09-02T10:00:00.000Z' }),
     )
     const before = await snapshot()
     const { shared } = stubShareSheet()
@@ -306,6 +306,9 @@ describe('無效的照片備份', () => {
     ['manifest 中有 recordDate 不是 YYYY-MM-DD 的項目（未補零）', { recordDate: '2024-3-5' }],
     ['manifest 中有 recordDate 不是實際存在日期的項目（13 月 99 日）', { recordDate: '2024-13-99' }],
     ['manifest 中有 recordDate 不是實際存在日期的項目（非閏年 2 月 29 日）', { recordDate: '2023-02-29' }],
+    ['manifest 中有 createdAt 不是 ISO 8601 的項目（空白分隔）', { createdAt: '2026-09-01 10:00:00' }],
+    ['manifest 中有 createdAt 不是 ISO 8601 的項目（時區位移）', { createdAt: '2026-09-01T18:00:00+08:00' }],
+    ['manifest 中有 createdAt 不是 ISO 8601 的項目（缺毫秒）', { createdAt: '2026-09-01T10:00:00Z' }],
     ['manifest 中有 width 或 height 不是正整數的項目（0）', { width: 0 }],
     ['manifest 中有 width 或 height 不是正整數的項目（小數）', { height: 1.5 }],
     ['manifest 中有 width 或 height 不是正整數的項目（字串）', { width: '2000' }],

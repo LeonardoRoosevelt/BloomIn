@@ -934,3 +934,24 @@ $ pnpm build → 成功
      → expected [ 'photos', 'photoBlobs' ] to not include 'photoBlobs'
 ```
 build 成功。
+
+## 單元 2 — 匯入時 `createdAt` 必須是 ISO 8601
+規格：`coverage.md` 的「manifest 項目結構無效」條目寫明 `createdAt` 必須是 App 產生的 `toISOString()` 格式（並說明理由：列表同日排序直接比較字串）。`.feature` 的 Outline 新增 Example「manifest 中有 createdAt 不是 ISO 8601 的項目」。gherkin／coverage 門禁 PASS。
+### Red
+新增三個變體：空白分隔 `2026-09-01 10:00:00`、時區位移 `2026-09-01T18:00:00+08:00`、缺毫秒 `2026-09-01T10:00:00Z`。
+同時把匯入測試的 Given `createdAt`（fixture 預設值與兩處字面值）改成 App 實際寫出的 `…T10:00:00.000Z`。這只是對齊資料格式，斷言不變；否則新規則會把合法的 Given 誤判為壞資料。
+```
+   × …：manifest 中有 createdAt 不是 ISO 8601 的項目（空白分隔） → expected true to be false
+   × …：manifest 中有 createdAt 不是 ISO 8601 的項目（時區位移） → expected true to be false
+   × …：manifest 中有 createdAt 不是 ISO 8601 的項目（缺毫秒）   → expected true to be false
+      Tests  3 failed | 132 passed (135)
+```
+失敗類型：功能未實作（只檢查是否為字串）
+### Green
+`src/store/photoBackup.ts` 新增 `isAppIsoTimestamp`：`new Date(v).toISOString() === v`。
+選擇理由：App 寫入的 `createdAt` 一律來自 `toISOString()`，匯出的備份也一定是這個格式。要求「解析後轉回來完全一致」可以同時擋下格式差異、時區寫法與溢位日期，並保證字串排序等於時間排序。代價是其他合法的 ISO 8601 寫法（帶時區位移、沒有毫秒）也會被拒；這些只可能來自人工編輯或其他程式，依「寧可拒絕」原則處理。
+```
+ Test Files  16 passed (16)
+      Tests  135 passed (135)
+```
+build 成功。

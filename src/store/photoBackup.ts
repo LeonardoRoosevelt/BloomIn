@@ -234,7 +234,7 @@ function entryProblem(entry: unknown): string | null {
     return '的紀錄日期格式不對'
   }
   if (typeof e.caption !== 'string') return '的說明欄位損壞'
-  if (typeof e.createdAt !== 'string') return '的建立時間欄位損壞'
+  if (typeof e.createdAt !== 'string' || !isAppIsoTimestamp(e.createdAt)) return '的建立時間欄位損壞'
   if (!isPositiveInteger(e.width) || !isPositiveInteger(e.height)) return '的尺寸欄位損壞'
   // 路徑限定在各自的目錄：擋下指向 manifest.json 的項目，也讓 'constructor' 之類的
   // 原型鏈屬性名（都不含 '/'）不可能被當成 zip 裡的檔案讀出來
@@ -247,6 +247,16 @@ function entryProblem(entry: unknown): string | null {
 function isRealDate(iso: string): boolean {
   const d = parseISODate(iso)
   return d !== null && toISODate(d) === iso
+}
+
+/**
+ * 只接受 App 自己寫出的格式（Date.prototype.toISOString 的輸出，UTC、含毫秒）。
+ * 列表同日排序直接比較這個字串；混入時區位移或少了毫秒的寫法，字串順序就不等於時間順序。
+ * 用「解析後再轉回來必須一模一樣」判斷，比任何正規表示式都不會漏掉溢位或格式差異。
+ */
+function isAppIsoTimestamp(v: string): boolean {
+  const t = new Date(v)
+  return !Number.isNaN(t.getTime()) && t.toISOString() === v
 }
 
 function isNonEmptyString(v: unknown): v is string {
